@@ -1,4 +1,4 @@
-import { Encryptor, Decryptor } from '../../src/sdk/cipher/chacha20-poly1305';
+import { Encryptor, Decryptor } from '../../../../src/sdk/cipher/chacha20-poly1305';
 import * as readline from 'readline';
 
 const CLIENT_KEY = new Uint8Array([

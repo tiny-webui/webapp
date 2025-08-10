@@ -1,5 +1,5 @@
+import { sodium } from '../../../../src/sdk/cipher/sodium';
 import { Client, Server, PSK_SIZE } from '../../../../src/sdk/cipher/ecdhe-psk';
-import { areUint8ArraysEqual } from '../../../../src/sdk/cipher/utility';
 import { HandshakeMessage, HandshakeMessageType } from '../../../../src/sdk/cipher/handshake-message';
 
 /**
@@ -23,7 +23,7 @@ describe('ECDHE-PSK', () => {
     additionalElements.set(HandshakeMessageType.PROTOCOL_TYPE, new Uint8Array([0x01, 0x02, 0x03]));
 
     const getPsk = (keyIndexIn: Uint8Array): Uint8Array => {
-        if (!areUint8ArraysEqual(keyIndexIn, keyIndex)) {
+        if (!sodium.memcmp(keyIndexIn, keyIndex)) {
             throw new Error("Key index does not match");
         }
         return psk;
@@ -66,8 +66,8 @@ describe('ECDHE-PSK', () => {
             const clientKeyFromServer = server.getClientKey();
             const serverKeyFromServer = server.getServerKey();
 
-            expect(areUint8ArraysEqual(clientKeyFromClient, clientKeyFromServer)).toBe(true);
-            expect(areUint8ArraysEqual(serverKeyFromClient, serverKeyFromServer)).toBe(true);
+            expect(sodium.memcmp(clientKeyFromClient, clientKeyFromServer)).toBe(true);
+            expect(sodium.memcmp(serverKeyFromClient, serverKeyFromServer)).toBe(true);
         });
     });
 
@@ -127,7 +127,7 @@ describe('ECDHE-PSK', () => {
             // Now try to call getNextMessage again - should throw
             expect(() => {
                 client.getNextMessage();
-            }).toThrow('Exceeding max call count');
+            }).toThrow('Invalid step');
         });
     });
 
@@ -141,7 +141,7 @@ describe('ECDHE-PSK', () => {
         test('should throw error for invalid PSK length', () => {
             const invalidGetPsk = (keyIndexIn: Uint8Array): Uint8Array => {
                 // Validate keyIndex but return wrong PSK size
-                if (!areUint8ArraysEqual(keyIndexIn, keyIndex)) {
+                if (!sodium.memcmp(keyIndexIn, keyIndex)) {
                     throw new Error("Key index does not match");
                 }
                 return new Uint8Array(16); // Wrong length
@@ -205,7 +205,7 @@ describe('ECDHE-PSK', () => {
             expect(() => {
                 const dummyMessage = new HandshakeMessage();
                 server.getNextMessage(dummyMessage);
-            }).toThrow('Exceeding max call count');
+            }).toThrow('Invalid step');
         });
     });
 
@@ -258,9 +258,9 @@ describe('ECDHE-PSK', () => {
             ]);
 
             const multiGetPsk = (keyIndexIn: Uint8Array): Uint8Array => {
-                if (areUint8ArraysEqual(keyIndexIn, keyIndex)) {
+                if (sodium.memcmp(keyIndexIn, keyIndex)) {
                     return psk;
-                } else if (areUint8ArraysEqual(keyIndexIn, keyIndex2)) {
+                } else if (sodium.memcmp(keyIndexIn, keyIndex2)) {
                     return psk2;
                 }
                 throw new Error("Unknown key index");
@@ -295,7 +295,7 @@ describe('ECDHE-PSK', () => {
             // Verify different keys were generated
             const keys1Client = client1.getClientKey();
             const keys2Client = client2.getClientKey();
-            expect(areUint8ArraysEqual(keys1Client, keys2Client)).toBe(false);
+            expect(sodium.memcmp(keys1Client, keys2Client)).toBe(false);
         });
     });
 });

@@ -2,8 +2,7 @@ import { sodium, crypto_kdf_hkdf_sha256_extract, crypto_kdf_hkdf_sha256_expand }
 import { HandshakeMessage, HandshakeMessageType } from './handshake-message';
 import { StepChecker } from './step-checker';
 import { Encryptor, Decryptor } from './chacha20-poly1305';
-import { areUint8ArraysEqual } from './utility';
-import { KEY_SIZE, IAuthenticationPeer } from './i-authentication-peer';
+import { IAuthenticationPeer } from './i-authentication-peer';
 
 export const PSK_SIZE = 32;
 export const PUBKEY_SIZE = sodium.crypto_kx_PUBLICKEYBYTES;
@@ -30,7 +29,7 @@ function getTranscriptHash(
     return sodium.crypto_generichash(HASH_SIZE, transcript);
 }
 
-export class Client implements IAuthenticationPeer {
+export class Client extends IAuthenticationPeer {
     #psk: Uint8Array;
     #firstMessageAdditionalElements: Map<HandshakeMessageType, Uint8Array> = new Map();
     #priKey: Uint8Array | undefined = undefined;
@@ -40,13 +39,13 @@ export class Client implements IAuthenticationPeer {
     #serverConfirmKey: Uint8Array | undefined = undefined;
     #clientKey: Uint8Array | undefined = undefined;
     #serverKey: Uint8Array | undefined = undefined;
-    #numCalls = 0;
 
     constructor(
         psk: Uint8Array,
         keyIndex: Uint8Array,
         additionalElements: Map<HandshakeMessageType, Uint8Array>
     ) {
+        super();
         this.#psk = psk;
         this.#firstMessageAdditionalElements.set(HandshakeMessageType.KEY_INDEX, keyIndex);
         for (const [type, value] of additionalElements) {
@@ -58,25 +57,26 @@ export class Client implements IAuthenticationPeer {
     }
 
     getNextMessage(peerMessage?: HandshakeMessage): HandshakeMessage | undefined {
-        switch (this.#numCalls++) {
-            case 0:
+        switch (this.#stepChecker.getCurrentStep()) {
+            case ClientStep.INIT:
                 if (peerMessage !== undefined) {
                     throw new Error('Peer message is not expected');
                 }
                 return this.#getClientMessage();
-            case 1:
+            case ClientStep.CLIENT_MESSAGE:
                 if (peerMessage === undefined) {
                     throw new Error('Peer message is required');
                 }
                 return this.#takeServerMessage(peerMessage);
-            case 2:
+            case ClientStep.SERVER_MESSAGE:
                 if (peerMessage === undefined) {
                     throw new Error('Peer message is required');
                 }
                 this.#takeServerConfirmation(peerMessage);
                 return undefined;
+            default:
+                throw new Error('Invalid step');
         }
-        throw new Error('Exceeding max call count');
     }
 
     isHandshakeComplete(): boolean {
@@ -140,11 +140,11 @@ export class Client implements IAuthenticationPeer {
         keyMaterial.set(Z);
         keyMaterial.set(this.#psk, Z.length);
         const prk = crypto_kdf_hkdf_sha256_extract(this.#transcriptHash, keyMaterial);
-        const clientConfirmKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "client confirm key", prk);
-        this.#serverConfirmKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "server confirm key", prk);
-        this.#clientKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "client key", prk);
-        this.#serverKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "server key", prk);
-        
+        const clientConfirmKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "client confirm key", prk);
+        this.#serverConfirmKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "server confirm key", prk);
+        this.#clientKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "client key", prk);
+        this.#serverKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "server key", prk);
+
         const encryptor = new Encryptor(clientConfirmKey);
         const clientConfirmMessage = encryptor.encrypt(this.#transcriptHash);
 
@@ -171,7 +171,7 @@ export class Client implements IAuthenticationPeer {
         if (this.#transcriptHash === undefined) {
             throw new Error("Transcript hash is not initialized");
         }
-        if (!areUint8ArraysEqual(decryptedHash, this.#transcriptHash)) {
+        if (!sodium.memcmp(decryptedHash, this.#transcriptHash)) {
             throw new Error("Server confirmation message does not match transcript hash");
         }
 
@@ -185,7 +185,7 @@ enum ServerStep {
     CLIENT_CONFIRMATION,
 };
 
-export class Server implements IAuthenticationPeer {
+export class Server extends IAuthenticationPeer {
     #getPsk: (keyIndex: Uint8Array) => Uint8Array;
     #clientConfirmKey: Uint8Array | undefined = undefined;
     #serverConfirmKey: Uint8Array | undefined = undefined;
@@ -193,26 +193,27 @@ export class Server implements IAuthenticationPeer {
     #serverKey: Uint8Array | undefined = undefined;
     #transcriptHash: Uint8Array | undefined = undefined;
     #stepChecker: StepChecker<ServerStep> = new StepChecker(ServerStep.INIT);
-    #numCalls = 0;
 
     constructor(getPsk: (keyIndex: Uint8Array) => Uint8Array) {
+        super();
         this.#getPsk = getPsk;
     }
 
     getNextMessage(peerMessage?: HandshakeMessage): HandshakeMessage | undefined {
-        switch (this.#numCalls++) {
-            case 0:
+        switch (this.#stepChecker.getCurrentStep()) {
+            case ServerStep.INIT:
                 if (peerMessage === undefined) {
                     throw new Error('Peer message is required');
                 }
                 return this.#takeClientMessage(peerMessage);
-            case 1:
+            case ServerStep.CLIENT_MESSAGE:
                 if (peerMessage === undefined) {
                     throw new Error('Peer message is required');
                 }
                 return this.#takeClientConfirmation(peerMessage);
+            default:
+                throw new Error('Invalid step');
         }
-        throw new Error('Exceeding max call count');
     }
 
     isHandshakeComplete(): boolean {
@@ -269,10 +270,10 @@ export class Server implements IAuthenticationPeer {
         keyMaterial.set(Z);
         keyMaterial.set(psk, Z.length);
         const prk = crypto_kdf_hkdf_sha256_extract(this.#transcriptHash, keyMaterial);
-        this.#clientConfirmKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "client confirm key", prk);
-        this.#serverConfirmKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "server confirm key", prk);
-        this.#clientKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "client key", prk);
-        this.#serverKey = crypto_kdf_hkdf_sha256_expand(KEY_SIZE, "server key", prk);
+        this.#clientConfirmKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "client confirm key", prk);
+        this.#serverConfirmKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "server confirm key", prk);
+        this.#clientKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "client key", prk);
+        this.#serverKey = crypto_kdf_hkdf_sha256_expand(IAuthenticationPeer.KEY_SIZE, "server key", prk);
 
         marker.confirm();
 
@@ -294,7 +295,7 @@ export class Server implements IAuthenticationPeer {
         if (this.#transcriptHash === undefined) {
             throw new Error("Transcript hash is not initialized");
         }
-        if (!areUint8ArraysEqual(decryptedHash, this.#transcriptHash)) {
+        if (!sodium.memcmp(decryptedHash, this.#transcriptHash)) {
             throw new Error("Client confirmation message does not match transcript hash");
         }
 

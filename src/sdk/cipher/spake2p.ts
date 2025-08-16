@@ -62,17 +62,17 @@ function deriveW0W1(
     offset += idVerifierBytes.length;
 
     const key = sodium.crypto_pwhash(
-        Scalar.SIZE * 2, 
+        Scalar.KEY_MATERIAL_SIZE * 2, 
         keyMaterial, 
         salt, 
         ARGON2ID_ITERATIONS, 
         ARGON2ID_MEM_COST_BYTES, 
         sodium.crypto_pwhash_ALG_ARGON2ID13);
-    const w0Bytes = key.slice(0, Scalar.SIZE);
-    const w1Bytes = key.slice(Scalar.SIZE, Scalar.SIZE * 2);
+    const w0Bytes = key.slice(0, Scalar.KEY_MATERIAL_SIZE);
+    const w1Bytes = key.slice(Scalar.KEY_MATERIAL_SIZE, Scalar.KEY_MATERIAL_SIZE * 2);
     return { 
-        w0: new Scalar(w0Bytes),
-        w1: new Scalar(w1Bytes)
+        w0: Scalar.reduce(w0Bytes),
+        w1: Scalar.reduce(w1Bytes)
     };
 }
 

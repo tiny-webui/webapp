@@ -3,10 +3,9 @@ import * as WebSocketClient from '../../../../src/sdk/session/websocket-client';
 
 const username = 'username';
 const password = 'password';
-const address = '127.0.0.1';
-const port = 12345;
+const url = '127.0.0.1:12345';
 
-const webSocketConnection = new WebSocketClient.Connection(address, port);
+const webSocketConnection = new WebSocketClient.Connection(url);
 const connection = new SecureSession.Connection(webSocketConnection, username, password);
 
 await connection.connectAsync();

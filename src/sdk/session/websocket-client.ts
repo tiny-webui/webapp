@@ -10,12 +10,15 @@ export class Connection extends IConnection {
     #messagePromiseReject: ((reason: unknown) => void) | undefined;
     #error: Error | undefined;
 
-    constructor(address: string, port: number) {
+    /**
+     * @param url The URL without ws:// or wss:// prefix
+     */
+    constructor(url: string) {
         super();
         if (isSecureContext()) {
-            this.#url = `wss://${address}:${port}`;
+            this.#url = `wss://${url}`;
         } else {
-            this.#url = `ws://${address}:${port}`;
+            this.#url = `ws://${url}`;
         }
     }
 

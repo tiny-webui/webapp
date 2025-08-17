@@ -24,13 +24,14 @@ type PendingStreamRequest = {
 
 export class Client {
     #connection: IConnection;
-    #onDisconnect: (() => void) | undefined;
-    #onCriticalError: ((error: unknown) => void);
+    #onDisconnect: () => void;
+    #onCriticalError: (error: unknown) => void;
     #idSeed: number = 0;
     #textEncoder = new TextEncoder();
     #textDecoder = new TextDecoder('utf-8');
     #pendingRequests: Map<number, PendingRequest> = new Map();
     #pendingStreamRequests: Map<number, PendingStreamRequest> = new Map();
+    #closed = false;
 
     constructor(
         connection: IConnection, 
@@ -49,7 +50,32 @@ export class Client {
     }
 
     close(): void {
+        this.#closeInternal();
+    }
+
+    #closeInternal(closedByPeer: boolean = false, error: unknown | undefined = undefined) {
+        if (this.#closed === true) {
+            return;
+        }
+        this.#closed = true;
+        for (const [, request] of this.#pendingRequests) {
+            clearTimeout(request.timeoutHandle);
+            request.reject(new RequestError(-1, "Connection closed"));
+        }
+        this.#pendingRequests.clear();
+        for (const [, request] of this.#pendingStreamRequests) {
+            clearTimeout(request.timeoutHandle);
+            request.error = new RequestError(-1, "Connection closed");
+            request.resolve?.();
+        }
+        this.#pendingStreamRequests.clear();
         this.#connection.close();
+        if (closedByPeer) {
+            this.#onDisconnect();
+        }
+        if (error !== undefined) {
+            this.#onCriticalError(error);
+        }
     }
 
     async makeRequestAsync<TRequest, TResponse>(method: string, params: TRequest, timeoutMs = 30000): Promise<TResponse> {
@@ -103,7 +129,11 @@ export class Client {
     async #sendRequest<TRequest>(method: string, params: TRequest): Promise<number> {
         if (this.#connection.isClosed()) {
             /** Try reconnect */
-            await this.connectAsync();
+            try {
+                await this.connectAsync();
+            } catch (error) {
+                throw new RequestError(-1, `failed to reconnect: ${error}`);   
+            }
         }
         const id = this.#idSeed++;
         if (this.#idSeed === Number.MAX_SAFE_INTEGER) {
@@ -115,7 +145,11 @@ export class Client {
             params
         };
         const requestData = this.#textEncoder.encode(JSON.stringify(request));
-        this.#connection.send(requestData);
+        try {
+            this.#connection.send(requestData);
+        } catch (error) {
+            throw new RequestError(-1, `failed to send message ${error}`);   
+        }
         return id;
     }
 
@@ -124,7 +158,7 @@ export class Client {
             while (true) {
                 const data = await this.#connection.receiveAsync();
                 if (data === undefined) {
-                    this.#onDisconnect?.();
+                    this.#closeInternal(true);
                     break;
                 }
                 let response: IRpc.Response | IRpc.ErrorResponse | IRpc.StreamEndResponse;
@@ -185,7 +219,7 @@ export class Client {
                 }
             }
         } catch (error) {
-            this.#onCriticalError?.(error);
+            this.#closeInternal(false, error ?? "unknown error");
         }
     }
 };

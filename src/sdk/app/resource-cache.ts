@@ -10,14 +10,18 @@ export class ResourceCache {
         ...args: Args
     ): Promise<T> {
         const key = this.#getKey(resourceKey);
-        let value: T;
+        let value: T|undefined;
         try {
             value = await getter(...args);
             this.#cache.set(key, value);
             return value;
         } catch (error) {
             if (error instanceof RequestError && error.code === ErrorCode.NOT_MODIFIED) {
-                return this.#cache.get(key) as T;
+                value = this.#cache.get(key) as T|undefined;
+                if (value === undefined) {
+                    throw new RequestError(-1, 'Cache error');
+                }
+                return value;
             } else {
                 throw error;
             }
@@ -31,6 +35,11 @@ export class ResourceCache {
         const key = this.#getKey(resourceKey);
         const value = this.#cache.get(key) as T;
         this.#cache.set(key, updater(value));
+    }
+
+    delete(resourceKey: string[]) {
+        const key = this.#getKey(resourceKey);
+        this.#cache.delete(key);
     }
 
     #getKey(resourceKey: string[]): string {
@@ -117,6 +126,14 @@ export class PagedResourceCache<T> {
             }
             throw error
         }
+    }
+
+    update(
+        filter: (item: T) => boolean,
+        updater: (item: T|undefined) => T
+    ): void {
+        const index = this.#cache.findIndex(item => item !== undefined && item !== null && filter(item));
+        this.#cache[index] = updater(this.#cache[index] ?? undefined);
     }
 
     unshift(item: T): void {

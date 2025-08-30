@@ -36,7 +36,7 @@ console.log(`using model ${modelId}`);
 
 const chatList = await client.getChatListAsync({start:0, quantity: 50});
 
-console.log(`Got chat list of len ${chatList.list.length}`);
+console.log(`Got chat list of len ${chatList.length}`);
 
 const chatId = await client.newChatAsync();
 

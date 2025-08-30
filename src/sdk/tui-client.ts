@@ -2,6 +2,7 @@ import * as rpc from './app/rpc';
 import * as secureSession from './session/secure-session'
 import * as websocket from './session/websocket-client'
 import * as types from './types/IServer';
+import { PagedResourceCache, ResourceCache } from './app/resource-cache';
 
 /**
  * @todo All methods
@@ -14,7 +15,9 @@ export class TUIClient {
     #onDisconnected: (error: unknown | undefined) => void;
     #wasUnderAttack: () => void;
     #rpcClient: rpc.Client | undefined = undefined;
-    
+    #cache: ResourceCache = new ResourceCache();
+    #chatListCache: PagedResourceCache<types.GetChatListResult[number]> = new PagedResourceCache();
+
     /**
      * 
      * @param url The websocket url. WITHOUT the protocol segment like ws:// or wss://
@@ -67,19 +70,20 @@ export class TUIClient {
         await this.#rpcClient.connectAsync();
     }
 
-    async getChatListAsync(params: types.GetChatListParams): Promise<types.GetChatListResult> {
+    async #getChatListAsync(start: number, quantity: number, metaDataKeys?: string[]): Promise<types.GetChatListResult> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
         const result = await this.#rpcClient.makeRequestAsync<types.GetChatListParams, types.GetChatListResult>(
-            'getChatList', params);
+            'getChatList', {
+                start,
+                quantity,
+                metaDataKeys
+            });
         if (!(typeof result === 'object') || result === null) {
             throw new rpc.RequestError(-1, "Invalid response, result should be an object");
         }
-        if (!('list' in result) || !Array.isArray(result.list)) {
-            throw new rpc.RequestError(-1, "Invalid response, invalid list");
-        }
-        for (const item of result.list) {
+        for (const item of result) {
             if (!('id' in item) || ((typeof item.id) !== 'string')) {
                 throw new rpc.RequestError(-1, "Invalid response, id missing");
             }
@@ -92,7 +96,15 @@ export class TUIClient {
         return result;
     }
 
-    async newChatAsync(): Promise<string> {
+    async getChatListAsync(params: types.GetChatListParams): Promise<types.GetChatListResult> {
+        return this.#chatListCache.getAsync(
+            this.#getChatListAsync.bind(this),
+            params.start,
+            params.quantity,
+            params.metaDataKeys);
+    }
+
+    async #newChatAsync(): Promise<string> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
@@ -103,7 +115,20 @@ export class TUIClient {
         return result;
     }
 
-    async * chatCompletionAsync(params: types.ChatCompletionParams): 
+    async newChatAsync(): Promise<string> {
+        const chatId = await this.#newChatAsync();
+        this.#chatListCache.unshift({
+            id: chatId
+        });
+        this.#cache.update<types.TreeHistory>(() => {
+            return {
+                nodes: {}
+            };
+        }, ['chat', chatId]);
+        return chatId;
+    }
+
+    async * #chatCompletionAsync(params: types.ChatCompletionParams): 
         AsyncGenerator<string, types.ChatCompletionInfo, void> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
@@ -132,7 +157,57 @@ export class TUIClient {
         }
     }
 
-    async getModelListAsync(params: types.GetModelListParams): Promise<types.GetModelListResult> {
+    async * chatCompletionAsync(params: types.ChatCompletionParams):
+        AsyncGenerator<string, types.ChatCompletionInfo, void> {
+        const userMessageTimestamp = Date.now();
+        let assistantMessageContent: string = '';
+        const generator = this.#chatCompletionAsync(params);
+        while (true) {
+            const it = await generator.next();
+            if (it.done === true) {
+                this.#cache.update<types.TreeHistory>((history) => {
+                    history = history ?? { nodes: {} } as types.TreeHistory;
+                    if (params.parent !== undefined) {
+                        const parent = history.nodes[params.parent];
+                        parent?.children.push(it.value.userMessageId);
+                    }
+                    history.nodes[it.value.userMessageId] = {
+                        id: it.value.userMessageId,
+                        message: params.userMessage,
+                        parent: params.parent,
+                        children: [it.value.assistantMessageId],
+                        /** 
+                         * This will differ from the server side value.
+                         * But that won't be a significant problem.
+                         * DO NOT use this as a unique identifier.
+                         */
+                        timestamp: userMessageTimestamp
+                    };
+                    history.nodes[it.value.assistantMessageId] = {
+                        id: it.value.assistantMessageId,
+                        message: {
+                            role: 'assistant',
+                            content: [{
+                                type: 'text',
+                                data: assistantMessageContent
+                            }]
+                        },
+                        parent: it.value.userMessageId,
+                        children: [],
+                        /** This will also differ from the server side value */
+                        timestamp: Date.now()
+                    };
+                    return history;
+                }, ['chat', params.id]);
+                return it.value;
+            } else {
+                assistantMessageContent += it.value;
+                yield it.value;
+            }
+        }
+    }
+
+    async #getModelListAsync(params: types.GetModelListParams): Promise<types.GetModelListResult> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
@@ -154,7 +229,11 @@ export class TUIClient {
         return result;
     }
 
-    async newModelAsync(params: types.ModelSettings): Promise<string> {
+    async getModelListAsync(params: types.GetModelListParams): Promise<types.GetModelListResult> {
+        return this.#cache.getAsync(this.#getModelListAsync.bind(this), ['modelList'], params);
+    }
+
+    async #newModelAsync(params: types.ModelSettings): Promise<string> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
@@ -164,6 +243,21 @@ export class TUIClient {
             throw new rpc.RequestError(-1, "Invalid response, result should be a string");
         }
         return result;
+    }
+
+    async newModelAsync(params: types.ModelSettings): Promise<string> {
+        const modelId = await this.#newModelAsync(params);
+        this.#cache.update<types.GetModelListResult>((list) => {
+            list = list ?? [];
+            list.unshift({
+                id: modelId
+            });
+            return list;
+        }, ['modelList']);
+        this.#cache.update<types.ModelSettings>(() => {
+            return params
+        }, ['model', modelId]);
+        return modelId;
     }
 
 }

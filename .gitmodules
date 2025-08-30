@@ -1,0 +1,3 @@
+[submodule "src/sdk/types"]
+	path = src/sdk/types
+	url = https://github.com/tiny-webui/types.git

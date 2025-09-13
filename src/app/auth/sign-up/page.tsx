@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Mail, Lock, User, CheckCircle } from "lucide-react";
+import { register } from "@/sdk/registration"
 
 export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
@@ -20,29 +21,24 @@ export default function SignUp() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    // 用户名验证
-    if (!formData.username.trim()) {
+    if (formData.username.trim() === "") {
       newErrors.username = "请输入用户名";
-    } else if (formData.username.length < 3) {
-      newErrors.username = "用户名至少需要3个字符";
     }
 
-    // 邮箱验证
-    if (!formData.email.trim()) {
+    if (formData.email.trim() === "") {
       newErrors.email = "请输入邮箱地址";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "请输入有效的邮箱地址";
     }
 
-    // 密码验证
-    if (!formData.password) {
+    /** DO NOT trim the password. Every character counts. */
+    if (formData.password === "") {
       newErrors.password = "请输入密码";
     } else if (formData.password.length < 6) {
       newErrors.password = "密码至少需要6个字符";
     }
 
-    // 确认密码验证
-    if (!formData.confirmPassword) {
+    if (formData.confirmPassword === "") {
       newErrors.confirmPassword = "请确认密码";
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = "两次输入的密码不一致";
@@ -61,13 +57,17 @@ export default function SignUp() {
 
     setIsLoading(true);
     
-    // 模拟注册请求
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log("注册信息:", formData);
-      // 这里可以添加实际的注册逻辑
+      /** This should be considered as user credential. DO NOT log it or keep it in ram!!! */
+      const registrationString = register({
+        username: formData.email,
+        password: formData.password,
+        publicMetadata: { displayName: formData.username }
+      });
+      console.log("Registration success");
+      /** @todo Show the registration string in a new page? Or in a pop up? */
     } catch (error) {
-      console.error("注册失败:", error);
+      console.error("Registration failed:", error);
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +75,7 @@ export default function SignUp() {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // 清除对应字段的错误
+    /** Clear error message for the field */
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: "" }));
     }
@@ -83,20 +83,20 @@ export default function SignUp() {
 
   return (
     <div className="w-full max-w-md space-y-8 p-4">
-      {/* 标题区域 */}
+      {/* Title */}
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">
           创建账户
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          请填写以下信息完成注册
+          请填写以下信息获取注册凭证
         </p>
       </div>
 
-      {/* 注册表单 */}
+      {/* Registration Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
-          {/* 用户名输入 */}
+          {/* User name */}
           <div className="space-y-2">
             <label htmlFor="username" className="text-sm font-medium text-foreground">
               用户名
@@ -118,7 +118,7 @@ export default function SignUp() {
             )}
           </div>
 
-          {/* 邮箱输入 */}
+          {/* Email */}
           <div className="space-y-2">
             <label htmlFor="email" className="text-sm font-medium text-foreground">
               邮箱地址
@@ -140,7 +140,7 @@ export default function SignUp() {
             )}
           </div>
 
-          {/* 密码输入 */}
+          {/* Password */}
           <div className="space-y-2">
             <label htmlFor="password" className="text-sm font-medium text-foreground">
               密码
@@ -173,7 +173,7 @@ export default function SignUp() {
             )}
           </div>
 
-          {/* 确认密码输入 */}
+          {/* Password check */}
           <div className="space-y-2">
             <label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
               确认密码
@@ -207,7 +207,7 @@ export default function SignUp() {
           </div>
         </div>
 
-        {/* 服务条款 */}
+        {/* Term of use */}
         <div className="flex items-start space-x-2">
           <input
             id="terms"
@@ -227,7 +227,7 @@ export default function SignUp() {
           </label>
         </div>
 
-        {/* 注册按钮 */}
+        {/* Submit */}
         <Button
           type="submit"
           className="w-full"
@@ -237,7 +237,7 @@ export default function SignUp() {
         </Button>
       </form>
 
-      {/* 分割线 */}
+      {/* Split line */}
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
           <span className="w-full border-t border-border" />
@@ -249,7 +249,7 @@ export default function SignUp() {
         </div>
       </div>
 
-      {/* 登录链接 */}
+      {/* Login link */}
       <div className="text-center">
         <p className="text-sm text-muted-foreground">
           已有账户？{" "}

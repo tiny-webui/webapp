@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Mail, Lock, User, CheckCircle } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { Eye, EyeOff, Mail, Lock, User, CheckCircle, ArrowRight } from "lucide-react";
 import { register } from "@/sdk/registration"
 
 export default function SignUp() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -17,6 +20,7 @@ export default function SignUp() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -64,8 +68,9 @@ export default function SignUp() {
         password: formData.password,
         publicMetadata: { displayName: formData.username }
       });
+      await navigator.clipboard.writeText(registrationString);
+      setShowSuccessModal(true);
       console.log("Registration success");
-      /** @todo Show the registration string in a new page? Or in a pop up? */
     } catch (error) {
       console.error("Registration failed:", error);
     } finally {
@@ -79,6 +84,11 @@ export default function SignUp() {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: "" }));
     }
+  };
+
+  const handleGoToSignIn = () => {
+    setShowSuccessModal(false);
+    router.push("/auth/sign-in");
   };
 
   return (
@@ -261,6 +271,38 @@ export default function SignUp() {
           </a>
         </p>
       </div>
+
+      {/* Success Modal */}
+      <Modal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="凭证创建成功"
+        showCloseButton={false}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="text-green-500 size-6" />
+            <p className="text-foreground font-medium">
+              凭证已复制到剪贴板
+            </p>
+          </div>
+          
+          <p className="text-sm text-foreground">
+            请将此凭证提供给管理员完成注册。<br/>
+            请勿分享或保存此凭证，凭证泄露可能导致您的密码被破解。
+          </p>
+
+          <div className="pt-2">
+            <Button
+              onClick={handleGoToSignIn}
+              className="w-full"
+            >
+              前往登录页面
+              <ArrowRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 } 

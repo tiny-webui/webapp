@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 
 export default function SignIn() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,13 +18,28 @@ export default function SignIn() {
     e.preventDefault();
     setIsLoading(true);
     
-    // 模拟登录请求
+    if (!TUIClientSingleton.exists()) {
+      TUIClientSingleton.create(
+        /** 
+         * @todo This is only for debug. Change to the ws' address for release.
+         */
+        `${window.location.hostname}:12345`,
+        (error) => {
+          /** @todo Handle disconnect properly */
+          console.error("TUIClient connection error: ", error);
+        },
+        () => {
+          /** @todo Inform the user about the suspected attack. */
+          console.log("This account was under attack.");
+        }
+      );
+    }
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log("登录信息:", { email, password });
-      // 这里可以添加实际的登录逻辑
+      await TUIClientSingleton.get().connectAsync(email, password);
+      console.log("Login successful");
+      router.push("/chat");
     } catch (error) {
-      console.error("登录失败:", error);
+      console.error("Login failed: ", error);
     } finally {
       setIsLoading(false);
     }
@@ -94,16 +112,6 @@ export default function SignIn() {
 
         {/* 记住我和忘记密码 */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <input
-              id="remember"
-              type="checkbox"
-              className="rounded border-input bg-background text-primary focus:ring-ring focus:ring-offset-2"
-            />
-            <label htmlFor="remember" className="text-sm text-muted-foreground">
-              记住我
-            </label>
-          </div>
           <a
             href="#"
             className="text-sm text-primary hover:underline"

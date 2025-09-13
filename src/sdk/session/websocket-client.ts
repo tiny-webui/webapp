@@ -1,14 +1,16 @@
 import { IConnection } from "./i-connection";
-import WebSocket from 'isomorphic-ws';
 import { isSecureContext } from "./secure-context";
 
 export class Connection extends IConnection {
+    static readonly #KEEP_ALIVE_INTERNAL_MS = 10_000;
+
     #url: string;
     #ws: WebSocket | undefined;
     #messageQueue: Uint8Array[] = [];
     #messagePromiseResolve: ((value: Uint8Array|undefined) => void) | undefined;
     #messagePromiseReject: ((reason: unknown) => void) | undefined;
-    #error: Error | undefined;
+    #error: Event | undefined = undefined;
+    #keepAliveTimer: ReturnType<typeof setTimeout> | undefined = undefined;
 
     /**
      * @param url The URL without ws:// or wss:// prefix
@@ -27,20 +29,26 @@ export class Connection extends IConnection {
             throw new Error("Connection is already open");
         }
         this.#ws = new WebSocket(this.#url);
+        this.#ws.binaryType = 'arraybuffer';
         await new Promise<void>((resolve, reject) => {
-            this.#ws?.on('open', () => {
+            this.#ws!.onopen = () => {
                 resolve();
-            });
-            this.#ws?.on('error', (error) => {
+            };
+            this.#ws!.onerror = (error) => {
                 this.#ws = undefined;
                 reject(error);
-            });
+            };
         });
         this.#setHandlers();
+        this.#scheduleKeepAlive();
     }
 
     #setHandlers() {
-        this.#ws?.on('close', () => {
+        if (this.#ws === undefined) {
+            return;
+        }
+        this.#ws.onclose = () => {
+            clearTimeout(this.#keepAliveTimer);
             this.#clearHandlers();
             this.#ws = undefined;
             if (this.#messagePromiseResolve) {
@@ -49,8 +57,8 @@ export class Connection extends IConnection {
                 this.#messagePromiseReject = undefined;
                 resolve(undefined);
             }
-        });
-        this.#ws?.on('error', (error) => {
+        };
+        this.#ws.onerror = (error) => {
             if (this.#messagePromiseReject) {
                 const reject = this.#messagePromiseReject;
                 this.#messagePromiseResolve = undefined;
@@ -59,9 +67,10 @@ export class Connection extends IConnection {
             } else {
                 this.#error = error;
             }
-        });
-        this.#ws?.on('message', (data, isBinary) => {
-            if (!isBinary) {
+        };
+        this.#ws.onmessage = (event) => {
+            let data = event.data;
+            if (typeof data === 'string') {
                 /** Only use binary data */
                 return;
             }
@@ -76,16 +85,21 @@ export class Connection extends IConnection {
             } else {
                 this.#messageQueue.push(new Uint8Array(data));
             }
-        });
+        };
     }
 
     #clearHandlers() {
-        this.#ws?.removeAllListeners('close');
-        this.#ws?.removeAllListeners('error');
-        this.#ws?.removeAllListeners('message');
+        if (this.#ws === undefined) {
+            return;
+        }
+        this.#ws.onopen = null;
+        this.#ws.onclose = null;
+        this.#ws.onerror = null;
+        this.#ws.onmessage = null;
     }
 
     close(): void {
+        clearTimeout(this.#keepAliveTimer);
         this.#clearHandlers();
         this.#ws?.close();
         this.#ws = undefined;
@@ -124,5 +138,21 @@ export class Connection extends IConnection {
             this.#messagePromiseResolve = resolve;
             this.#messagePromiseReject = reject;
         });
+    }
+
+    #scheduleKeepAlive() {
+        this.#keepAliveTimer = setTimeout(() => {
+            this.#keepAliveTimer = undefined;
+            if (this.#ws === undefined) {
+                return;
+            }
+            this.#scheduleKeepAlive();
+            /**
+             * Use text message for keepalive. As they will be silently discarded.
+             * This is only for avoiding idling. Not for detecting broken connection.
+             * Thus, it is unidirectional. Do not expect the server to respond.
+             */
+            this.#ws.send('ka');
+        }, Connection.#KEEP_ALIVE_INTERNAL_MS);
     }
 };

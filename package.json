@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:static": "node scripts/exclude-dev-routes.mjs && next build && next export && node scripts/restore-dev-routes.mjs",
     "lint": "next lint",
     "test": "node --experimental-vm-modules node_modules/.bin/jest"
   },
@@ -35,6 +36,9 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
     "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/jest-dom": "^6.4.8",
     "tailwindcss": "^4.1.8",
     "ts-jest": "^29.4.1",
     "tw-animate-css": "^1.3.6",

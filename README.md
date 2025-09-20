@@ -20,6 +20,45 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Interactive Dev Demos
+
+Development pages for manually exploring the components without a backend.
+
+Run the dev server and open:
+
+```
+npm run dev
+```
+
+Entry points:
+
+* Side bar
+
+http://localhost:3000/dev/side-demo
+
+* User input
+
+http://localhost:3000/dev/user-input-demo
+
+These pages are purely for local manual testing and are not intended for production deployment.
+
+### Static Export Without Dev Pages
+
+When generating a static bundle (e.g. deploying to a plain static host), use:
+
+```
+npm run build:static
+```
+
+This script will:
+1. Temporarily move `src/app/dev` to `.dev-pages.stash` before `next build` / `next export`.
+2. Run `next build` followed by `next export` (output in `out/`).
+3. Restore the dev pages directory afterward so local development can continue.
+
+Artifacts `.dev-pages.stash` and marker `.dev-pages-removed` are git‑ignored.
+
+Result: No `/dev/*` HTML or assets are included in the exported static site.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

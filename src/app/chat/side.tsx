@@ -5,6 +5,7 @@ import { Logo } from "@/components/custom/logo";
 import { Button } from "@/components/ui/button";
 import { Settings } from "lucide-react";
 import * as ServerTypes from "@/sdk/types/IServer";
+import { ChatTitle } from "./chat-title";
 
 interface SideProps {
   /** Switch to a chat id. Pass undefined for the temporary new chat */
@@ -50,22 +51,8 @@ export function Side({
     }
   }, [isLoading, requestChatListUpdateAsync]);
 
-  const getChatTitle = useCallback((chat: ServerTypes.GetChatListResult[number]): string => {
-    const title = chat.metadata?.title;
-    if (typeof title === "string") {
-      return title;
-    } else {
-      return "未命名对话"; // Fallback
-    }
-  }, []);
-
-  const handleNewChat = useCallback(() => {
-    // Simply switch to undefined; rest of logic handled upstream.
-    onSwitchChat(undefined);
-  }, [onSwitchChat]);
-
-  const handleClickChat = useCallback(
-    (chatId: string) => {
+  const onChatSelected = useCallback(
+    (chatId: string | undefined) => {
       onSwitchChat(chatId);
     }, [onSwitchChat]);
 
@@ -131,9 +118,6 @@ export function Side({
     });
   }, [updateVisibleRange, maybeLoadMore]);
 
-  // Auto-scroll to keep the active chat or temp chat in view has been intentionally removed.
-  // Rationale: The design now prefers preserving the user's current scroll position.
-
   /** Recompute visible range after data changes */
   useEffect(() => {
     updateVisibleRange();
@@ -168,31 +152,26 @@ export function Side({
       >
         <div className="p-4 pt-0">
           <div className="space-y-1">
-            <div
+            <ChatTitle
               key="temp-chat"
-              className={`flex items-center px-3 py-2 rounded-md cursor-pointer text-sm transition-colors ${
-                activeChatId === undefined
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-accent hover:text-accent-foreground"
-              }`}
-              onClick={() => handleNewChat()}
-            >
-              <span className="flex-1 truncate">开始新对话</span>
-            </div>
-            {chatList.map((chat, idx) => (
-              <div
+              id={undefined}
+              active={activeChatId === undefined}
+              title="开始新对话"
+              onChatSelected={onChatSelected}
+            />
+            {chatList.map((chat, idx) => {
+              const title: string = (typeof chat.metadata?.title === 'string') ? chat.metadata.title : '未命名对话';
+              return <ChatTitle
                 key={chat.id}
-                ref={(el) => { chatItemRefs.current[idx] = el; }}
-                onClick={() => handleClickChat(chat.id)}
-                className={`flex items-center px-3 py-2 rounded-md cursor-pointer text-sm transition-colors ${
-                  chat.id === activeChatId
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-accent hover:text-accent-foreground"
-                }`}
-              >
-                <span className="flex-1 truncate">{getChatTitle(chat)}</span>
-              </div>
-            ))}
+                id={chat.id}
+                active={chat.id === activeChatId}
+                title={title}
+                ref={el => {
+                  chatItemRefs.current[idx] = el;
+                }}
+                onChatSelected={onChatSelected}
+              />
+            })}
             {isLoading && (
               <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground select-none">
                 <span className="inline-block size-3 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-label="loading" />

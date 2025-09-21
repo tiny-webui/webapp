@@ -40,6 +40,10 @@ http://localhost:3000/dev/side-demo
 
 http://localhost:3000/dev/user-input-demo
 
+* Message (single message preview)
+
+http://localhost:3000/dev/message-demo
+
 These pages are purely for local manual testing and are not intended for production deployment.
 
 ### Static Export Without Dev Pages

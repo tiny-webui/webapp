@@ -6,12 +6,12 @@ import Image from "next/image";
 import { getProviderDisplayName, getProviderIcon } from "./model/provider-registry";
 import { CreateModelDialog } from "./model/create-model-dialog";
 import { ModifyModelDialog } from "./model/modify-model-dialog";
+import { DeleteModelDialog } from "./model/delete-model-dialog";
 
 type ModelInfo = {
   id: string;
   name: string;
   providerName: string;
-  providerParams: unknown;
 };
 
 
@@ -20,6 +20,7 @@ export function ModelSettings() {
   const [loaded, setLoaded] = useState(false);
   const [showCreateModelDialog, setShowCreateModelDialog] = useState(false);
   const [modelToModify, setModelToModify] = useState<string | undefined>(undefined);
+  const [modelToDelete, setModelToDelete] = useState<ModelInfo | undefined>(undefined);
 
   const loadModels = useCallback(async () => {
     setLoaded(false);
@@ -73,8 +74,15 @@ export function ModelSettings() {
             className="relative flex h-20 overflow-hidden rounded-lg border bg-card/50 p-2 shadow-xs hover:shadow-sm transition-all"
             onClick={() => setModelToModify(model.id)}
           >
+            <button
+              type="button"
+              aria-label="删除模型"
+              className="absolute top-1 right-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-background/80 text-muted-foreground hover:text-foreground hover:bg-destructive/20 hover:border-destructive/50 border border-border/60 text-xs font-semibold transition-colors"
+              onClick={(e) => { e.stopPropagation(); setModelToDelete(model); }}
+            >
+              ×
+            </button>
             <div className="flex w-full items-center">
-              {/* Square icon area: fills card height (minus padding) but keeps square ratio */}
               <div className="relative mr-3 aspect-square h-full max-h-20 shrink-0">
                 <Image
                   src={getProviderIcon(model.providerName)}
@@ -111,6 +119,17 @@ export function ModelSettings() {
             modelId={modelToModify}
             onComplete={() => {
               setModelToModify(undefined);
+              loadModels().catch(console.error);
+            }}
+          />
+        )
+      }
+      {
+        modelToDelete && (
+          <DeleteModelDialog
+            modelInfo={modelToDelete}
+            onComplete={() => {
+              setModelToDelete(undefined);
               loadModels().catch(console.error);
             }}
           />

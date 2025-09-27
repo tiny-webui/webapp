@@ -91,10 +91,16 @@ export default function ChatPage() {
       if (canceled) {
         return;
       }
-      if (settings.UserSettings.defaultModelId !== undefined) {
+      const models = await TUIClientSingleton.get().getModelListAsync({
+        metadataKeys: ['name']
+      });
+      if (canceled) {
+        return;
+      }
+      if (models.find(m => m.id === settings.UserSettings.defaultModelId) !== undefined) {
         setSelectedModelId(settings.UserSettings.defaultModelId);
       }
-      if (settings.GlobalSettings.titleGenerationModelId !== undefined) {
+      if (models.find(m => m.id === settings.GlobalSettings.titleGenerationModelId) !== undefined) {
         setTitleGenerationModelId(settings.GlobalSettings.titleGenerationModelId);
       }
       setInitialized(true);

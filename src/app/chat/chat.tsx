@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -11,139 +10,255 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { 
-  ChevronDown,
   Settings,
   User,
-  X,
-  Globe,
-  Image,
-  Code,
-  Send,
-  Plus,
-  MessageSquare,
-  Share
 } from "lucide-react";
-
-interface Message {
-  id: string;
-  content: string;
-  isUser: boolean;
-  timestamp: Date;
-}
+import * as ServerTypes from "@/sdk/types/IServer";
+import { TUIClientSingleton } from "@/lib/tui-client-singleton";
+import { UserInput } from "./user-input";
+import { Message } from "./message";
 
 interface ChatProps {
-  activeConversationId: string;
+  onCreateChat: (chatInfo: ServerTypes.GetChatListResult[0]) => void;
+  requestChatListUpdateAsync: () => Promise<void>;
+  activeChatId?: string;
 }
 
-// 模拟不同对话的消息内容
-const conversationMessages: Record<string, Message[]> = {
-  "1": [
-    {
-      id: "1-1",
-      content: "你好！我是TinyWebUI助手，有什么可以帮助你的吗？",
-      isUser: false,
-      timestamp: new Date()
-    },
-    {
-      id: "1-2",
-      content: "我想了解一下矿车速度插件的配置",
-      isUser: true,
-      timestamp: new Date()
-    },
-    {
-      id: "1-3",
-      content: "好的！矿车速度插件可以帮助你调整Minecraft中矿车的移动速度。主要配置包括：\n\n1. 基础速度设置\n2. 加速倍率\n3. 最大速度限制\n\n你想了解哪个方面的配置？",
-      isUser: false,
-      timestamp: new Date()
-    }
-  ],
-  "2": [
-    {
-      id: "2-1",
-      content: "你好！我是TinyWebUI助手，有什么可以帮助你的吗？",
-      isUser: false,
-      timestamp: new Date()
-    },
-    {
-      id: "2-2",
-      content: "我需要翻译一些查询命令",
-      isUser: true,
-      timestamp: new Date()
-    },
-    {
-      id: "2-3",
-      content: "我可以帮你翻译各种查询命令。请告诉我具体需要翻译什么命令，比如：\n\n- 玩家查询命令\n- 服务器状态命令\n- 权限查询命令\n\n你遇到的是哪种类型的命令？",
-      isUser: false,
-      timestamp: new Date()
-    }
-  ],
-  "3": [
-    {
-      id: "3-1",
-      content: "你好！我是TinyWebUI助手，有什么可以帮助你的吗？",
-      isUser: false,
-      timestamp: new Date()
-    },
-    {
-      id: "3-2",
-      content: "Docker容器启动失败了",
-      isUser: true,
-      timestamp: new Date()
-    },
-    {
-      id: "3-3",
-      content: "Docker启动失败通常有以下几个常见原因：\n\n1. 端口冲突\n2. 镜像不存在\n3. 权限问题\n4. 磁盘空间不足\n\n请提供具体的错误信息，我可以帮你更准确地诊断问题。",
-      isUser: false,
-      timestamp: new Date()
-    }
-  ]
-};
+export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId}: ChatProps) {
+  const [modelList, setModelList] = useState<ServerTypes.GetModelListResult>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(undefined);
+  const [generating, setGenerating] = useState(false);
+  const [loadingChat, setLoadingChat] = useState(false);
+  const [treeHistory, setTreeHistory] = useState<ServerTypes.TreeHistory>({ nodes: {} });
+  const [tailNodeId, setTailNodeId] = useState<string | undefined>(undefined);
+  const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.Message | undefined>(undefined);
+  const [pendingAssistantMessage, setPendingAssistantMessage] = useState<ServerTypes.Message | undefined>(undefined);
+  const syncChatHistoryCounter = useRef(0);
+  const generatingCounter = useRef(0);
 
-export function Chat({ activeConversationId }: ChatProps) {
-  const [inputValue, setInputValue] = useState("");
-  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
-  
-  // 根据当前对话ID获取消息
-  const messages = conversationMessages[activeConversationId] || [
-    {
-      id: "default-1",
-      content: "你好！我是TinyWebUI助手，有什么可以帮助你的吗？",
-      isUser: false,
-      timestamp: new Date()
+  async function syncChatHistoryAsync() {
+    if (generating) {
+      /** 
+       * Cannot read when its generating.
+       * This can happen when the title is generated but the generation is still ongoing.
+       */
+      return;
     }
-  ];
+    const originalCounter = ++syncChatHistoryCounter.current;
+    if (!activeChatId) {
+      setTreeHistory({ nodes: {} });
+      setTailNodeId(undefined);
+      setLoadingChat(false);
+      return;
+    }
+    setLoadingChat(true);
+    let callMismatch = false;
+    try {
+      const loadedTreeHistory = await TUIClientSingleton.get().getChatAsync(activeChatId);
+      if (originalCounter !== syncChatHistoryCounter.current) {
+        callMismatch = true;
+        return;
+      }
+      setTreeHistory(loadedTreeHistory);
+      if ((tailNodeId === undefined || loadedTreeHistory.nodes[tailNodeId] === undefined)) {
+        if (Object.keys(loadedTreeHistory.nodes).length === 0) {
+          setTailNodeId(undefined);
+        } else {
+          /** Use the node with the latest timestamp as the tail */
+          let latestNode = Object.values(loadedTreeHistory.nodes).reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
+          /** 
+           * Do a sanity check by go to one of the true ends where the "latest" node may lead to. 
+           * Avoiding potential inconsistent timestamp. 
+           */
+          while (latestNode.children.length > 0) {
+            latestNode = loadedTreeHistory.nodes[latestNode.children[0]];
+          }
+          setTailNodeId(latestNode.id);
+        }
+      }
+    } finally {
+      if (!callMismatch) {
+        setLoadingChat(false);
+      }
+    }
+  }
 
-  const handleSend = () => {
-    if (inputValue.trim()) {
-      // 这里可以添加发送消息的逻辑
-      console.log("发送消息:", inputValue);
-      setInputValue("");
+  async function syncModelListAsync() {
+    const models = await TUIClientSingleton.get().getModelListAsync({
+      metadataKeys: ['name']
+    });
+    setModelList(models);
+    if (selectedModelId === undefined && models.length > 0) {
+      setSelectedModelId(models[0].id);
+    }
+  }
+
+  useEffect(() => {
+    /** @todo reduce model list update frequency. Maybe move the menu from the chat page to higher level. */
+    syncModelListAsync();
+    syncChatHistoryAsync();
+  }, [activeChatId]);
+
+  async function onUserMessage(message: ServerTypes.Message) {
+    if (loadingChat || generating) {
+      throw new Error("Cannot send message while loading or generating.");
+    }
+    if (message.role !== 'user') {
+      throw new Error("Only user role messages are allowed to be sent from the input area.");
+    }
+    if (selectedModelId === undefined) {
+      throw new Error("No model selected for chat.");
+    }
+    setPendingUserMessage(message);
+    const originalCounter = ++generatingCounter.current;
+    let callMismatch = false;
+    setGenerating(true);
+    try {
+      const assistantMessage: ServerTypes.Message = {
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            data: ''
+          }
+        ]
+      };
+      const userMessageTimestamp = Date.now();
+      setPendingAssistantMessage(assistantMessage);
+      let chatId = activeChatId;
+      let isNewChat = false;
+      if (chatId === undefined) {
+        isNewChat = true;
+        /** @todo This may throw CONFLICT. If so, we need to request a chat list update and retry. */
+        chatId = await TUIClientSingleton.get().newChatAsync();
+        /** Do the chat title generation concurrently */
+        generateChatTitleAndNotifyNewChatAsync(chatId, message);
+      }
+      /** 
+       * This step should start even on mismatch to ensure a concise chat history
+       * @todo: This may throw CONFLICT. If so, we need to update the local history and notify the user about this.
+       */
+      const generator = TUIClientSingleton.get().chatCompletionAsync({
+        id: chatId,
+        parent: isNewChat ? undefined : tailNodeId,
+        modelId: selectedModelId,
+        userMessage: message
+      });
+      while (true) {
+        const result = await generator.next();
+        if (originalCounter !== generatingCounter.current) {
+          callMismatch = true;
+          return;
+        }
+        if (result.done) {
+          const userMessageNode: ServerTypes.MessageNode = {
+            id: result.value.userMessageId,
+            message: message,
+            parent: tailNodeId,
+            children: [result.value.assistantMessageId],
+            timestamp: userMessageTimestamp,
+          };
+          const assistantMessageNode: ServerTypes.MessageNode = {
+            id: result.value.assistantMessageId,
+            message: assistantMessage,
+            parent: userMessageNode.id,
+            children: [],
+            timestamp: Date.now(),
+          };
+          setTreeHistory(prev => ({
+            nodes: {
+              ...prev.nodes,
+              [userMessageNode.id]: userMessageNode,
+              [assistantMessageNode.id]: assistantMessageNode,
+            }
+          }));
+          setTailNodeId(assistantMessageNode.id);
+          setPendingUserMessage(undefined);
+          setPendingAssistantMessage(undefined);
+          break;
+        } else {
+          assistantMessage.content[0].data = assistantMessage.content[0].data + result.value;
+          setPendingAssistantMessage({ ...assistantMessage });
+        }
+      }
+    } finally {
+      if (!callMismatch) {
+        setGenerating(false);
+      }
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  async function generateChatTitleAndNotifyNewChatAsync(chatId: string, message: ServerTypes.Message) {
+    if (selectedModelId === undefined) {
+      throw new Error("No model selected for title generation.");
     }
-  };
+    /** Avoid messing with the referenced message */
+    message = JSON.parse(JSON.stringify(message)) as ServerTypes.Message;
+    /** 
+     * @todo Modify the server to take a multi message parameter for this.
+     * So we can use a developer prompt instead.
+     */
+    message.content.unshift({
+      type: 'text',
+      data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
+    });
+    const title = (await TUIClientSingleton.get().executeGenerationTaskAsync({
+      modelId: selectedModelId,
+      message: message
+    })).trim();
+    await TUIClientSingleton.get().setMetadataAsync({
+      path: ['chat', chatId],
+      entries: {
+        title: title 
+      }
+    });
+    onCreateChat({
+      id: chatId,
+      metadata: {
+        title: title
+      }
+    });
+  }
+
+  function getLinearHistory() : ServerTypes.MessageNode[] {
+    const nodes: ServerTypes.MessageNode[] = [];
+    let id = tailNodeId;
+    while (id !== undefined) {
+      const node = treeHistory.nodes[id];
+      if (node === undefined) {
+        throw new Error(`Inconsistent tree history state: node ${id} not found.`);
+      }
+      nodes.unshift(node);
+      id = node.parent;
+    }
+    return nodes;
+  }
+
+  function getModelName(model: ServerTypes.GetModelListResult[number]): string {
+    const modelName = model.metadata?.name;
+    if (!(typeof modelName === 'string')) {
+      return "未命名模型";
+    }
+    return modelName;
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-background">
-      {/* 顶部栏 */}
+
+      { /** Menu bar */}
       <div className="border-b border-border p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
+            <Select value={selectedModelId} onValueChange={setSelectedModelId}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
-                <SelectItem value="gpt-4o">gpt-4o</SelectItem>
-                <SelectItem value="gpt-3.5-turbo">gpt-3.5-turbo</SelectItem>
-                <SelectItem value="claude-3-sonnet">claude-3-sonnet</SelectItem>
-                <SelectItem value="claude-3-haiku">claude-3-haiku</SelectItem>
+                {modelList.map(model => (
+                  <SelectItem key={model.id} value={model.id}>
+                    {getModelName(model)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <span className="text-xs text-muted-foreground">设为默认</span>
@@ -160,105 +275,31 @@ export function Chat({ activeConversationId }: ChatProps) {
         </div>
       </div>
 
-      {/* 信息横幅 */}
-      <div className="bg-blue-500 text-white px-4 py-2 flex items-center justify-between">
-        <span className="text-sm">
-          这是一条公告
-        </span>
-        <Button variant="ghost" size="sm" className="text-white hover:bg-blue-600">
-          <X className="size-4" />
-        </Button>
-      </div>
-
-      {/* 对话内容区域 */}
+      
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-[642px] mx-auto">
-          {messages.length === 0 ? (
-            // 空状态
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <MessageSquare className="size-16 text-muted-foreground mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-foreground mb-2">
-                  {selectedModel}
-                </h2>
-                <p className="text-muted-foreground">
-                  开始新的对话吧！
-                </p>
-              </div>
-            </div>
-          ) : (
-            // 消息列表
-            <div className="space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.isUser ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                      message.isUser
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
-                    }`}
-                  >
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <div className="max-w-[900px] mx-auto space-y-4">
+          { /** Chat history */}
+          {getLinearHistory()
+            .filter(n => n.message.role !== 'developer')
+            .map(node => (
+              <Message key={node.id} id={node.id} message={node.message} />
+            ))}
+          { /** Pending user message */ }
+          {pendingUserMessage && (
+            <Message key="pending-user-message" message={pendingUserMessage} />
+          )}
+          { /** Pending assistant message */ }
+          {pendingAssistantMessage && (
+            <Message key="pending-assistant-message" message={pendingAssistantMessage} />
           )}
         </div>
       </div>
 
-      {/* 底部输入区域 */}
-      <div className="border-t border-border p-4">
-        <div className="max-w-[642px] mx-auto">
-          {/* 输入框 */}
-          <div className="flex items-end space-x-2 mb-3">
-            <Button variant="ghost" size="sm">
-              <Plus className="size-4" />
-            </Button>
-            <div className="flex-1 relative">
-              <Input
-                placeholder="今天我能为您做些什么？"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                className="pr-12"
-              />
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                <Button variant="ghost" size="sm" onClick={handleSend}>
-                  <Send className="size-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* 功能按钮 */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                <Globe className="size-4 mr-1" />
-                网络搜索
-              </Button>
-              <Button variant="outline" size="sm">
-                <Image className="size-4 mr-1" />
-                图像
-              </Button>
-              <Button variant="outline" size="sm">
-                <Code className="size-4 mr-1" />
-                代码解释器
-              </Button>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Button variant="ghost" size="sm">
-                <Share className="size-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      { /** User input area */ }
+      <UserInput
+        onUserMessage={onUserMessage}
+        inputEnabled={!loadingChat && !generating}
+      />
     </div>
   );
-} 
+}

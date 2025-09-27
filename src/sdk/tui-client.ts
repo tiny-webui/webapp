@@ -4,7 +4,7 @@ import * as websocket from './session/websocket-client'
 import * as types from './types/IServer';
 import { PagedResourceCache, ResourceCache } from './app/resource-cache';
 
-export class TUIClient {
+export class TUIClient implements types.IServer {
     #url: string;
     #onDisconnected: (error: unknown | undefined) => void;
     #wasUnderAttack: () => void;
@@ -120,6 +120,47 @@ export class TUIClient {
             };
         }, ['chat', chatId]);
         return chatId;
+    }
+
+    async #getChatAsync(id: string): Promise<types.TreeHistory> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<string, types.TreeHistory>('getChat', id);
+        if (typeof result !== 'object' || result === null) {
+            throw new rpc.RequestError(-1, "Invalid response, result should be an object");
+        }
+        if (typeof result.nodes !== 'object' || result.nodes === null) {
+            throw new rpc.RequestError(-1, "Invalid response, nodes should be an object");
+        }
+        for (const nodeId in result.nodes) {
+            const node = result.nodes[nodeId];
+            if (typeof node.id !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid response, node.id should be a string");
+            }
+            if (typeof node.message !== 'object' || node.message === null) {
+                throw new rpc.RequestError(-1, "Invalid response, node.message should be an object");
+            }
+            if (node.parent !== undefined && typeof node.parent !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid response, node.parent should be a string");
+            }
+            if (!Array.isArray(node.children)) {
+                throw new rpc.RequestError(-1, "Invalid response, node.children should be an array");
+            }
+            for (const childId of node.children) {
+                if (typeof childId !== 'string') {
+                    throw new rpc.RequestError(-1, "Invalid response, node.children should be an array of strings");
+                }
+            }
+            if (typeof node.timestamp !== 'number') {
+                throw new rpc.RequestError(-1, "Invalid response, node.timestamp should be a number");
+            }
+        }
+        return result;
+    }
+
+    async getChatAsync(id: string): Promise<types.TreeHistory> {
+        return await this.#cache.getAsync(this.#getChatAsync.bind(this), ['chat', id], id);
     }
 
     async #deleteChatAsync(id: string): Promise<void> {
@@ -448,7 +489,7 @@ export class TUIClient {
             'setUserAdminSettings', params);
     }
 
-    async setUserAdminSettings(params: types.SetUserAdminSettingsParams): Promise<void> {
+    async setUserAdminSettingsAsync(params: types.SetUserAdminSettingsParams): Promise<void> {
         await this.#setUserAdminSettingsAsync(params);
         this.#cache.update<types.GetUserListResult>(list => {
             const user = list?.find(u => u.id === params.id);

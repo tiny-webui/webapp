@@ -1,0 +1,127 @@
+"use client";
+
+import { Button } from "@/components/ui/button";
+// Using a custom styled textarea instead of the single-line Input component.
+import { Send } from "lucide-react";
+import React from "react";
+import * as ServerTypes from "@/sdk/types/IServer";
+import { cn } from "@/lib/utils";
+
+interface UserInputProps {
+  onUserMessage: (message: ServerTypes.Message) => void;
+  /** This controls the send button. Not the editor. */
+  inputEnabled: boolean;
+}
+
+export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
+  // @todo: future mixed text & image input support.
+  const [inputValue, setInputValue] = React.useState("");
+  // Resizable input height (textarea content box only)
+  const [editorHeight, setEditorHeight] = React.useState<number>(140);
+  const startYRef = React.useRef<number | null>(null);
+  const startHeightRef = React.useRef<number>(0);
+  const draggingRef = React.useRef(false);
+  const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+
+  const MIN_HEIGHT = 80;
+  const MAX_HEIGHT = 400;
+
+  const beginDrag = (e: React.MouseEvent) => {
+    startYRef.current = e.clientY;
+  startHeightRef.current = editorHeight;
+    draggingRef.current = true;
+    // Prevent text selection while dragging.
+    document.body.style.userSelect = "none";
+  };
+
+  React.useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current || startYRef.current === null) return;
+      const delta = startYRef.current - e.clientY; // dragging up increases height
+  const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeightRef.current + delta));
+  setEditorHeight(newHeight);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      startYRef.current = null;
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [editorHeight]);
+
+  const handleSend = () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
+    // Format according to ServerTypes.Message shape.
+    onUserMessage({ role: "user", content: [{ type: "text", data: trimmed }] });
+    setInputValue("");
+    // Refocus for subsequent typing.
+    requestAnimationFrame(() => textAreaRef.current?.focus());
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && e.altKey) {
+      e.preventDefault();
+      if (inputEnabled) {
+        handleSend();
+      }
+    }
+  };
+
+  const sendDisabled = !inputEnabled || !inputValue.trim();
+
+  return (
+    <div className="border-t border-border p-4 relative select-none">
+      {/* Drag handle (top edge) */}
+      <div
+        className="absolute top-0 left-0 right-0 h-2 cursor-row-resize"
+        onMouseDown={beginDrag}
+        aria-label="调整输入区域高度"
+      >
+        <div className="mx-auto h-full w-24">
+          {/* visual hint - subtle line */}
+          <div className="h-[2px] mt-[6px] rounded bg-muted-foreground/30" />
+        </div>
+      </div>
+  <div className="max-w-[900px] mx-auto flex flex-col justify-end">
+        <div className="flex items-end mb-2">
+          <div className="flex-1 relative" style={{ height: editorHeight }}>
+            <textarea
+              ref={textAreaRef}
+              placeholder="请输入内容，Alt + Enter 发送"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              style={{ height: editorHeight, minHeight: MIN_HEIGHT, maxHeight: MAX_HEIGHT }}
+              className={cn(
+                "block w-full resize-none pr-24", // reserve space for send button
+                "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground",
+                "dark:bg-input/30 border-input rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none",
+                "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+                "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+                "scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent"
+              )}
+            />
+            <div className="absolute right-2 bottom-2 flex items-center space-x-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSend}
+                disabled={sendDisabled}
+                aria-label={sendDisabled ? "发送不可用" : "发送消息 (Alt+Enter)"}
+              >
+                <Send className="size-4 mr-1" />
+                <span className="text-[10px] leading-none text-muted-foreground">Alt+Enter</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

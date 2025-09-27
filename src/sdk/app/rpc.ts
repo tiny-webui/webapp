@@ -79,18 +79,31 @@ export class Client {
     }
 
     async makeRequestAsync<TRequest, TResponse>(method: string, params: TRequest, timeoutMs = 30000): Promise<TResponse> {
-        const id = await this.#sendRequest(method, params);
-        return new Promise<TResponse>((resolve, reject) => {
-            const timeoutHandle = setTimeout(() => {
-                this.#pendingRequests.delete(id);
-                reject(new RequestError(-1, "Request timeout"));
-            }, timeoutMs);
-            this.#pendingRequests.set(id, { 
-                timeoutHandle,
-                resolve: resolve as (v: unknown) => void,
-                reject
-            });
-        });
+        try {
+            const id = await this.#sendRequest(method, params);
+            const response = await (new Promise<TResponse>((resolve, reject) => {
+                const timeoutHandle = setTimeout(() => {
+                    this.#pendingRequests.delete(id);
+                    reject(new RequestError(-1, "Request timeout"));
+                }, timeoutMs);
+                this.#pendingRequests.set(id, { 
+                    timeoutHandle,
+                    resolve: resolve as (v: unknown) => void,
+                    reject
+                });
+            }));
+            return response;
+        } catch (error) {
+            if (error instanceof RequestError) {
+                /** DO NOT log error that are supposed to happen. */
+                if (![IRpc.ErrorCode.CONFLICT, IRpc.ErrorCode.LOCKED, IRpc.ErrorCode.NOT_MODIFIED].includes(error.code)) {
+                    console.error(`Request ${method} failed: ${error.message} (code ${error.code})`);
+                }
+            } else {
+                console.error(`Request ${method} failed: ${error}`);
+            }
+            throw error;
+        }
     }
 
     async * makeStreamRequestAsync<TRequest, TSegment, TFinalResponse>(
@@ -121,6 +134,9 @@ export class Client {
                 }
             }
             if (request.error !== undefined) {
+                if (![IRpc.ErrorCode.CONFLICT, IRpc.ErrorCode.LOCKED, IRpc.ErrorCode.NOT_MODIFIED].includes(request.error.code)) {
+                    console.error(`Stream request ${method} failed: ${request.error.message} (code ${request.error.code})`);
+                }
                 throw request.error;
             }
         }

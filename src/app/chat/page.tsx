@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Chat } from "./chat";
+import { ChatMenuBar } from "./menu-bar";
 import { Side } from "./side";
 import * as ServerTypes from "@/sdk/types/IServer";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
@@ -12,6 +13,7 @@ const CHAT_LIST_MARGIN = 50;
 
 export default function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<string|undefined>(undefined);
+  const [selectedModelId, setSelectedModelId] = useState<string|undefined>(undefined);
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
@@ -73,10 +75,11 @@ export default function ChatPage() {
 
   useEffect(() => {
     updateChatListDedupAsync().catch(console.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       <Side 
         onSwitchChat={onSwitchChat}
         requestChatListUpdateAsync={updateChatListDedupAsync}
@@ -84,11 +87,18 @@ export default function ChatPage() {
         chatList={chatList}
         activeChatId={activeChatId}
       />
-      <Chat
-        onCreateChat={onCreateChat}
-        requestChatListUpdateAsync={updateChatListDedupAsync}
-        activeChatId={activeChatId}
-      />
+      <div className="flex-1 flex flex-col min-h-0">
+        <ChatMenuBar
+          selectedModelId={selectedModelId}
+          onSelectedModelIdChange={setSelectedModelId}
+        />
+        <Chat
+          onCreateChat={onCreateChat}
+          requestChatListUpdateAsync={updateChatListDedupAsync}
+          activeChatId={activeChatId}
+          selectedModelId={selectedModelId}
+        />
+      </div>
     </div>
   );
 }

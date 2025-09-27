@@ -1,18 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { 
-  Settings,
-  User,
-} from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import * as ServerTypes from "@/sdk/types/IServer";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import { UserInput } from "./user-input";
@@ -22,11 +10,13 @@ interface ChatProps {
   onCreateChat: (chatInfo: ServerTypes.GetChatListResult[0]) => void;
   requestChatListUpdateAsync: () => Promise<void>;
   activeChatId?: string;
+  selectedModelId?: string;
 }
 
-export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId}: ChatProps) {
-  const [modelList, setModelList] = useState<ServerTypes.GetModelListResult>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(undefined);
+export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId, selectedModelId}: ChatProps) {
+  /** @todo unused for now. */
+  void requestChatListUpdateAsync;
+
   const [generating, setGenerating] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
   const [treeHistory, setTreeHistory] = useState<ServerTypes.TreeHistory>({ nodes: {} });
@@ -36,7 +26,7 @@ export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId}: 
   const syncChatHistoryCounter = useRef(0);
   const generatingCounter = useRef(0);
 
-  async function syncChatHistoryAsync() {
+  const syncChatHistoryAsync = useCallback(async () => {
     if (generating) {
       /** 
        * Cannot read when its generating.
@@ -81,22 +71,11 @@ export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId}: 
         setLoadingChat(false);
       }
     }
-  }
-
-  async function syncModelListAsync() {
-    const models = await TUIClientSingleton.get().getModelListAsync({
-      metadataKeys: ['name']
-    });
-    setModelList(models);
-    if (selectedModelId === undefined && models.length > 0) {
-      setSelectedModelId(models[0].id);
-    }
-  }
+  }, [activeChatId, tailNodeId, generating]);
 
   useEffect(() => {
-    /** @todo reduce model list update frequency. Maybe move the menu from the chat page to higher level. */
-    syncModelListAsync();
     syncChatHistoryAsync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId]);
 
   async function onUserMessage(message: ServerTypes.Message) {
@@ -234,47 +213,8 @@ export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId}: 
     return nodes;
   }
 
-  function getModelName(model: ServerTypes.GetModelListResult[number]): string {
-    const modelName = model.metadata?.name;
-    if (!(typeof modelName === 'string')) {
-      return "未命名模型";
-    }
-    return modelName;
-  }
-
   return (
-    <div className="flex-1 flex flex-col bg-background">
-
-      { /** Menu bar */}
-      <div className="border-b border-border p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Select value={selectedModelId} onValueChange={setSelectedModelId}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {modelList.map(model => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {getModelName(model)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="text-xs text-muted-foreground">设为默认</span>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <Button variant="ghost" size="sm">
-              <Settings className="size-4" />
-            </Button>
-            <Button variant="ghost" size="sm">
-              <User className="size-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex-1 flex flex-col bg-background min-h-0">
       
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-[900px] mx-auto space-y-4">

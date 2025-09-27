@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Logo } from "@/components/custom/logo";
-import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
 import * as ServerTypes from "@/sdk/types/IServer";
 import { ChatTitle } from "./chat-title";
 
@@ -138,9 +136,6 @@ export function Side({
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <Logo size="md" />
-          <Button variant="ghost" size="sm">
-            <Settings className="size-4" />
-          </Button>
         </div>
       </div>
 

@@ -8,16 +8,16 @@ import { AzureOpenAIForm } from './azure-openai-form';
 import { TUIClientSingleton } from '@/lib/tui-client-singleton';
 
 export interface CreateModelDialogProps {
-  onModelCreationComplete: () => void; // UI-only for now
+  onComplete: () => void; // UI-only for now
 }
 
-export const CreateModelDialog = ({ onModelCreationComplete }: CreateModelDialogProps) => {
+export const CreateModelDialog = ({ onComplete }: CreateModelDialogProps) => {
   const [selectedProvider, setSelectedProvider] = useState<ProviderKey | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
-  const createModelAsync = useCallback(async (name: string, settings: Record<string, unknown>) => {
+  const createModelAsync = useCallback(async (name: string, settings: unknown) => {
     if (!selectedProvider) {
-      onModelCreationComplete();
+      onComplete();
       return;
     }
     setSaving(true);
@@ -35,14 +35,14 @@ export const CreateModelDialog = ({ onModelCreationComplete }: CreateModelDialog
     } catch(error) {
       console.error("Failed to create model", error);
     } finally {
-      onModelCreationComplete();
+      onComplete();
     }
-  }, [selectedProvider, onModelCreationComplete]);
+  }, [selectedProvider, onComplete]);
 
   return (
     <Modal
       isOpen={true}
-      onClose={onModelCreationComplete}
+      onClose={onComplete}
       title={selectedProvider ? `新建${getProviderDisplayName(selectedProvider)}模型` : "选择模型提供商"}
     >
       {selectedProvider === undefined && (!saving) && (

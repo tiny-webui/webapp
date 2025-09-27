@@ -1,3 +1,5 @@
 export interface ProviderFormProps {
-    onSubmit: (name: string, settings: Record<string, unknown>) => Promise<void>;
+    initialName?: string;
+    initialSettings?: unknown;
+    onSubmit: (name: string, settings: unknown) => Promise<void>;
 }

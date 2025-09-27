@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ProviderFormProps } from './provider-form-props';
+import { tryGetProperty } from '@/lib/obj-helper';
 
-export function AzureOpenAIForm({ onSubmit }: ProviderFormProps) {
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
+export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: ProviderFormProps) {
+  const [name, setName] = useState<string>(initialName ?? '');
+  const [url, setUrl] = useState<string>(tryGetProperty(initialSettings, 'url', 'string') ?? '');
+  const [apiKey, setApiKey] = useState<string>(tryGetProperty(initialSettings, 'apiKey', 'string') ?? '');
 
   const canSubmit = name.trim() && url.trim() && apiKey.trim();
 

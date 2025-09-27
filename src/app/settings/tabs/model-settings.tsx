@@ -5,11 +5,13 @@ import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import Image from "next/image";
 import { getProviderDisplayName, getProviderIcon } from "./model/provider-registry";
 import { CreateModelDialog } from "./model/create-model-dialog";
+import { ModifyModelDialog } from "./model/modify-model-dialog";
 
 type ModelInfo = {
   id: string;
   name: string;
   providerName: string;
+  providerParams: unknown;
 };
 
 
@@ -17,6 +19,7 @@ export function ModelSettings() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [showCreateModelDialog, setShowCreateModelDialog] = useState(false);
+  const [modelToModify, setModelToModify] = useState<string | undefined>(undefined);
 
   const loadModels = useCallback(async () => {
     setLoaded(false);
@@ -26,10 +29,12 @@ export function ModelSettings() {
       if (typeof modelName !== "string") {
         modelName = "未命名模型";
       }
+      const modelSettings = await TUIClientSingleton.get().getModelAsync(model.id);
       return {
         id: model.id,
         name: modelName, 
-        providerName: (await TUIClientSingleton.get().getModelAsync(model.id)).providerName
+        providerName: modelSettings.providerName,
+        providerParams: modelSettings.providerParams
       }
     }));
     setModels(modelInfoList);
@@ -57,9 +62,7 @@ export function ModelSettings() {
         <button
           type="button"
           className="group relative flex h-20 flex-col items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/40 hover:border-primary/60 hover:bg-accent/40 transition-colors p-2"
-          onClick={() => {
-            setShowCreateModelDialog(true);
-          }}
+          onClick={() => setShowCreateModelDialog(true)}
           aria-label="新增模型"
         >
           <div className="text-3xl leading-none text-muted-foreground group-hover:text-primary">+</div>
@@ -68,6 +71,7 @@ export function ModelSettings() {
           <div
             key={model.id}
             className="relative flex h-20 overflow-hidden rounded-lg border bg-card/50 p-2 shadow-xs hover:shadow-sm transition-all"
+            onClick={() => setModelToModify(model.id)}
           >
             <div className="flex w-full items-center">
               {/* Square icon area: fills card height (minus padding) but keeps square ratio */}
@@ -94,8 +98,19 @@ export function ModelSettings() {
       {
         showCreateModelDialog && (
           <CreateModelDialog
-            onModelCreationComplete={() => {
+            onComplete={() => {
               setShowCreateModelDialog(false);
+              loadModels().catch(console.error);
+            }}
+          />
+        )
+      }
+      {
+        modelToModify && (
+          <ModifyModelDialog
+            modelId={modelToModify}
+            onComplete={() => {
+              setModelToModify(undefined);
               loadModels().catch(console.error);
             }}
           />

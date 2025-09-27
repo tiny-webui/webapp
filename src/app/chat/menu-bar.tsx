@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -20,6 +21,7 @@ interface ChatMenuBarProps {
 
 export function ChatMenuBar({ selectedModelId, onSelectedModelIdChange }: ChatMenuBarProps) {
   const [modelList, setModelList] = useState<ServerTypes.GetModelListResult>([]);
+  const router = useRouter();
 
   function getModelName(model: ServerTypes.GetModelListResult[number]): string {
     const modelName = model.metadata?.name;
@@ -70,7 +72,12 @@ export function ChatMenuBar({ selectedModelId, onSelectedModelIdChange }: ChatMe
           <span className="text-xs text-muted-foreground">设为默认</span>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="ghost" size="sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push("/settings")}
+            aria-label="打开设置"
+          >
             <Settings className="size-4" />
           </Button>
         </div>

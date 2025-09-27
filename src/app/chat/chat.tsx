@@ -11,9 +11,16 @@ interface ChatProps {
   requestChatListUpdateAsync: () => Promise<void>;
   activeChatId?: string;
   selectedModelId?: string;
+  titleGenerationModelId?: string;
 }
 
-export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId, selectedModelId}: ChatProps) {
+export function Chat({ 
+  onCreateChat,
+  requestChatListUpdateAsync,
+  activeChatId,
+  selectedModelId,
+  titleGenerationModelId
+}: ChatProps) {
   /** @todo unused for now. */
   void requestChatListUpdateAsync;
 
@@ -168,7 +175,8 @@ export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId, s
   };
 
   async function generateChatTitleAndNotifyNewChatAsync(chatId: string, message: ServerTypes.Message) {
-    if (selectedModelId === undefined) {
+    const modelId = titleGenerationModelId ?? selectedModelId;
+    if (modelId === undefined) {
       throw new Error("No model selected for title generation.");
     }
     /** Avoid messing with the referenced message */
@@ -182,7 +190,7 @@ export function Chat({ onCreateChat, requestChatListUpdateAsync, activeChatId, s
       data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
     });
     const title = (await TUIClientSingleton.get().executeGenerationTaskAsync({
-      modelId: selectedModelId,
+      modelId: modelId,
       message: message
     })).trim();
     await TUIClientSingleton.get().setMetadataAsync({

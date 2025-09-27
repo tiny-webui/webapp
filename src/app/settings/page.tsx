@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/custom/logo";
-import { UiSettings } from "./components/UiSettings";
-import { ChatSettings } from "./components/ChatSettings";
-import { ModelSettings } from "./components/ModelSettings";
-import { GlobalSettings } from "./components/GlobalSettings";
+import { UiSettings } from "./tabs/UiSettings";
+import { ChatSettings } from "./tabs/ChatSettings";
+import { ModelSettings } from "./tabs/ModelSettings";
+import { GlobalSettings } from "./tabs/GlobalSettings";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 
 const structure = [
@@ -130,12 +130,13 @@ export default function SettingsPage() {
             <X className="size-4" />
           </Button>
         </div>
-        {/* Content area */}
-        <div className="flex-1 overflow-auto p-6">
-          {currentTab === "ui" && <UiSettings />}
-          {currentTab === "chat" && <ChatSettings />}
-          {currentTab === "model" && isAdmin && <ModelSettings />}
-          {currentTab === "global" && isAdmin && <GlobalSettings />}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-[900px] mx-auto space-y-8 py-2">
+            {currentTab === "ui" && <UiSettings />}
+            {currentTab === "chat" && <ChatSettings />}
+            {currentTab === "model" && isAdmin && <ModelSettings />}
+            {currentTab === "global" && isAdmin && <GlobalSettings />}
+          </div>
         </div>
       </div>
     </div>

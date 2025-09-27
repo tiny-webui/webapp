@@ -8,13 +8,17 @@ import * as ServerTypes from "@/sdk/types/IServer";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import { RequestError } from "@/sdk/app/rpc";
 import { ErrorCode } from "@/sdk/types/Rpc";
+import * as settings from "@/lib/settings";
+import { Logo } from "@/components/custom/logo";
 
 const CHAT_LIST_MARGIN = 50;
 
 export default function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<string|undefined>(undefined);
   const [selectedModelId, setSelectedModelId] = useState<string|undefined>(undefined);
+  const [titleGenerationModelId, setTitleGenerationModelId] = useState<string|undefined>(undefined);
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
+  const [initialized, setInitialized] = useState(false);
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
   const updateChatListPromise = useRef<Promise<void>|undefined>(undefined);
@@ -65,7 +69,6 @@ export default function ChatPage() {
   }
 
   async function updateChatListDedupAsync() {
-    console.log("updateChatListDedupAsync called");
     if (updateChatListPromise.current === undefined) {
       updateChatListPromise.current = updateChatListAsync();
     }
@@ -74,10 +77,48 @@ export default function ChatPage() {
   }
 
   useEffect(() => {
-    updateChatListDedupAsync().catch(console.error);
+    let canceled = false;
+    (async () => {
+      await updateChatListDedupAsync();
+      if (canceled) {
+        return;
+      }
+      await settings.UserSettings.fetchAsync();
+      if (canceled) {
+        return;
+      }
+      await settings.GlobalSettings.fetchAsync();
+      if (canceled) {
+        return;
+      }
+      if (settings.UserSettings.defaultModelId !== undefined) {
+        setSelectedModelId(settings.UserSettings.defaultModelId);
+      }
+      if (settings.GlobalSettings.titleGenerationModelId !== undefined) {
+        setTitleGenerationModelId(settings.GlobalSettings.titleGenerationModelId);
+      }
+      setInitialized(true);
+    })().catch(console.error);
+    return () => { canceled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (!initialized) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-6">
+          <Logo className="text-primary" size="lg" />
+          <div className="relative h-12 w-12">
+            {/* Static track */}
+            <div className="absolute inset-0 rounded-full border-4 border-muted opacity-30" />
+            {/* Spinning arc */}
+            <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          </div>
+          <span className="sr-only">Loading</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <Side 
@@ -97,6 +138,7 @@ export default function ChatPage() {
           requestChatListUpdateAsync={updateChatListDedupAsync}
           activeChatId={activeChatId}
           selectedModelId={selectedModelId}
+          titleGenerationModelId={titleGenerationModelId}
         />
       </div>
     </div>

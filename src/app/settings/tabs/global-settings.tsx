@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import * as settings from "@/lib/settings";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import * as ServerTypes from "@/sdk/types/IServer";
-import { DropDownOption } from "../options/DropDown";
+import { DropDownOption } from "../options/drop-down";
 
 export function GlobalSettings() {
   const [titleGenerationModelId, setTitleGenerationModelId] = useState<string | undefined>(undefined);

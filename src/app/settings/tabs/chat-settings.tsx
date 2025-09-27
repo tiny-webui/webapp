@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { UserSettings } from "@/lib/settings";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import * as ServerTypes from "@/sdk/types/IServer";
-import { DropDownOption } from "../options/DropDown";
+import { DropDownOption } from "../options/drop-down";
 
 export function ChatSettings() {
   const [defaultModelId, setDefaultModelId] = useState<string | undefined>(undefined);

@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/custom/logo";
-import { UiSettings } from "./tabs/UiSettings";
-import { ChatSettings } from "./tabs/ChatSettings";
-import { ModelSettings } from "./tabs/ModelSettings";
-import { GlobalSettings } from "./tabs/GlobalSettings";
+import { UiSettings } from "./tabs/ui-settings";
+import { ChatSettings } from "./tabs/chat-settings";
+import { ModelSettings } from "./tabs/model-settings";
+import { GlobalSettings } from "./tabs/global-settings";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 
 const structure = [

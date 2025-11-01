@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import NextImage from "next/image";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
 const THUMBNAIL_SIZE = 80;
 
@@ -11,9 +12,13 @@ export interface ImageBlockProps {
   alt?: string;
   onOpen?: () => void;
   onClose?: () => void;
+  /** Show an inline remove button (typically for unsent / draft images). */
+  removable?: boolean;
+  /** Called when the remove button is clicked. Parent is responsible for actually removing the block. */
+  onRemove?: () => void;
 }
 
-export function ImageBlock({ src, alt, onOpen, onClose }: ImageBlockProps) {
+export function ImageBlock({ src, alt, onOpen, onClose, removable, onRemove }: ImageBlockProps) {
   const [open, setOpen] = useState(false);
 
   const handleOpen = () => {
@@ -73,20 +78,32 @@ export function ImageBlock({ src, alt, onOpen, onClose }: ImageBlockProps) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={handleOpen}
-        className="group relative h-20 w-20 border border-border rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring bg-background/40"
-        aria-label={alt ? `Open image: ${alt}` : "Open image"}
-      >
-        <NextImage
-          src={src}
-          alt={alt || "image thumbnail"}
-          width={THUMBNAIL_SIZE}
+      <div className="relative inline-block">
+        <button
+          type="button"
+          onClick={handleOpen}
+          className="group relative h-20 w-20 border border-border rounded-md overflow-hidden focus:outline-none focus:ring-2 focus:ring-ring bg-background/40"
+          aria-label={alt ? `Open image: ${alt}` : "Open image"}
+        >
+          <NextImage
+            src={src}
+            alt={alt || "image thumbnail"}
+            width={THUMBNAIL_SIZE}
             height={THUMBNAIL_SIZE}
-          className="h-full w-full object-cover transition-transform group-hover:scale-105"
-        />
-      </button>
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+          />
+        </button>
+        {removable && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+            className="absolute -top-2 -right-2 h-6 w-6 rounded-full flex items-center justify-center bg-background/80 border border-border text-foreground/70 shadow-sm backdrop-blur-sm hover:text-foreground hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            aria-label="移除图片"
+          >
+            <X className="h-4 w-4" strokeWidth={2.4} />
+          </button>
+        )}
+      </div>
       {typeof window !== "undefined" && overlay ? createPortal(overlay, document.body) : null}
     </>
   );

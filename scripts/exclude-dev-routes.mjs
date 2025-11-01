@@ -13,7 +13,15 @@ if (!fs.existsSync(devDir)) {
 }
 
 if (fs.existsSync(stashDir)) {
-  console.error('[exclude-dev-routes] stash directory already exists, aborting to avoid overwriting.');
+  if (!fs.existsSync(devDir)) {
+    // Previous run likely failed before restore; allow continuing.
+    console.log('[exclude-dev-routes] Dev pages already stashed, continuing.');
+    if (!fs.existsSync(marker)) {
+      fs.writeFileSync(marker, new Date().toISOString());
+    }
+    process.exit(0);
+  }
+  console.error('[exclude-dev-routes] stash directory already exists while dev directory still present; aborting to avoid overwriting.');
   process.exit(1);
 }
 

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState } from "react";
 import { UserInput } from "@/app/chat/user-input";
+import { Message } from "@/app/chat/message";
 import type * as ServerTypes from "@/sdk/types/IServer";
 import { Button } from "@/components/ui/button";
 
@@ -33,12 +34,9 @@ export default function UserInputDemoPage() {
       </div>
       <div className="flex-1 overflow-y-auto p-6">
         {lastMessage ? (
-          <div className="max-w-[900px] mx-auto">
-            <div className="flex justify-end">
-              <div className="max-w-[70%] bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm whitespace-pre-wrap">
-                {lastMessage.content.map((p, i) => <span key={i}>{p.data}</span>)}
-              </div>
-            </div>
+          <div className="max-w-[900px] mx-auto space-y-4">
+            {/* Use the shared Message component so this demo exercises both input & rendering */}
+            <Message message={lastMessage} />
           </div>
         ) : (
           <div className="text-xs text-muted-foreground">暂无消息。输入内容并使用 Alt+Enter 发送。</div>

@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import ImageBlock from "@/components/custom/image-block";
-// Using a custom styled textarea instead of the single-line Input component.
 import { Send } from "lucide-react";
 import React from "react";
 import * as ServerTypes from "@/sdk/types/IServer";
@@ -19,7 +18,6 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
   const [inputValue, setInputValue] = React.useState("");
   /** Image data urls */
   const [imageUrls, setImageUrls] = React.useState<string[]>([]);
-  // Resizable input height (textarea content box only)
   const [editorHeight, setEditorHeight] = React.useState<number>(140);
   const startYRef = React.useRef<number | null>(null);
   const startHeightRef = React.useRef<number>(0);
@@ -58,6 +56,13 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
       window.removeEventListener("mouseup", onUp);
     };
   }, [editorHeight]);
+
+  React.useEffect(() => {
+    const ta = textAreaRef.current;
+    if (ta) {
+      ta.style.height = `${ta.scrollHeight}px`;
+    }
+  }, [editorHeight, inputValue, imageUrls]);
 
   const handleSend = () => {
     const trimmed = inputValue.trim();
@@ -140,7 +145,7 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
         </div>
       </div>
       <div className="max-w-[900px] mx-auto flex flex-col justify-end">
-        <div className="flex items-end mb-2">
+        <div className="flex items-end">
           <div className="flex-1 relative" style={{ height: editorHeight }}>
             <div
               className={cn(
@@ -169,13 +174,13 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 className={cn(
-                  "w-full resize-none pr-24", // reserve space for send button
+                  "w-full resize-none",
                   "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground",
                   "dark:bg-input/30 bg-transparent px-3 py-2 text-sm outline-none flex-shrink-0",
                   "focus-visible:border-none focus-visible:ring-0",
                   imageUrls.length > 0 ? "pt-1" : "",
                 )}
-                style={{ minHeight: MIN_HEIGHT }}
+                rows={1}
               />
             </div>
             <div className="absolute right-2 bottom-2 flex items-center space-x-1">

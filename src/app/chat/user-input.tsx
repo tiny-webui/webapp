@@ -60,6 +60,7 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
   React.useEffect(() => {
     const ta = textAreaRef.current;
     if (ta) {
+      ta.style.height = "auto";
       ta.style.height = `${ta.scrollHeight}px`;
     }
   }, [editorHeight, inputValue, imageUrls]);

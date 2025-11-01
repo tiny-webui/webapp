@@ -2,6 +2,7 @@
 
 import React from "react";
 import ImageBlock from "@/components/custom/image-block";
+import MarkdownRenderer from "@/components/custom/markdown-renderer";
 import * as ServerTypes from "@/sdk/types/IServer";
 
 interface MessageProps {
@@ -24,32 +25,26 @@ export function Message({ message }: MessageProps) {
   // Image preview now handled by ImageBlock component.
 
   return (
-    <>
-      <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-        <div
-          className={`max-w-[90%] rounded-lg px-4 py-2 ${
-            isUser ? "bg-primary text-primary-foreground" : "bg-muted"
-          }`}
-        >
-          {/* Thumbnails row(s) */}
-          {imageBlocks.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-2">
-              {imageBlocks.map((img, idx) => (
-                <ImageBlock
-                  key={idx}
-                  src={img.data}
-                  alt={`image ${idx + 1}`}
-                />
-              ))}
-            </div>
-          )}
-          {/* Combined text block */}
-            <p className="text-sm whitespace-pre-wrap break-words break-all">
-              {combinedText}
-            </p>
-        </div>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`max-w-[90%] rounded-lg px-4 py-2 ${
+          isUser ? "bg-primary text-primary-foreground" : "bg-muted"
+        }`}
+      >
+        {/* Thumbnails row(s) */}
+        {imageBlocks.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {imageBlocks.map((img, idx) => (
+              <ImageBlock
+                key={idx}
+                src={img.data}
+                alt={`image ${idx + 1}`}
+              />
+            ))}
+          </div>
+        )}
+        <MarkdownRenderer content={combinedText}/>
       </div>
-      {/* Individual image previews handled within ImageBlock via portal */}
-    </>
+    </div>
   );
 }

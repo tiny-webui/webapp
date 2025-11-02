@@ -245,6 +245,58 @@ export function Chat({
     setMessageToEdit(undefined);
   }, [previousTailNodeId]);
 
+  function getNodeSiblings(tree: ServerTypes.TreeHistory, nodeId: string): ServerTypes.MessageNode[] {
+    const parentId = tree.nodes[nodeId].parent;
+    if (parentId === undefined) {
+      /** Root node, find all root nodes in a stable order */
+      return Object.values(tree.nodes).filter(n => n.parent === undefined).sort((a, b) => a.timestamp - b.timestamp);
+    } else {
+      return tree.nodes[parentId].children.map(childId => tree.nodes[childId]);
+    }
+  }
+
+  function findLatestTailFromRoot(tree: ServerTypes.TreeHistory, rootId: string): ServerTypes.MessageNode {
+    let currentNode = tree.nodes[rootId];
+    while (currentNode.children.length > 0) {
+      const latestChild = currentNode.children
+        .map(childId => tree.nodes[childId])
+        .reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
+      currentNode = latestChild;
+    }
+    return currentNode;
+  }
+
+  const messageHasPreviousSiblings = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    return siblings.findIndex(n => n.id === id) > 0;
+  }, [treeHistory]);
+
+  const messageHasNextSiblings = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    const index = siblings.findIndex(n => n.id === id);
+    return index >= 0 && index < siblings.length - 1;
+  }, [treeHistory]);
+
+  const gotoPreviousSibling = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    const index = siblings.findIndex(n => n.id === id);
+    if (index <= 0) {
+      return;
+    }
+    const rootId = siblings[index - 1].id;
+    setTailNodeId(findLatestTailFromRoot(treeHistory, rootId).id);
+  }, [treeHistory, setTailNodeId]);
+
+  const gotoNextSibling = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    const index = siblings.findIndex(n => n.id === id);
+    if (index < 0 || index >= siblings.length - 1) {
+      return;
+    }
+    const rootId = siblings[index + 1].id;
+    setTailNodeId(findLatestTailFromRoot(treeHistory, rootId).id);
+  }, [treeHistory, setTailNodeId]);
+
   return (
     <div className="flex-1 flex flex-col bg-background min-h-0">
       
@@ -256,8 +308,13 @@ export function Chat({
               <Message 
                 key={node.id}
                 message={node.message}
-                editable={node.message.role==='user' && !loadingChat && !generating && !editingBranch}
+                showButtons={node.message.role === 'user'}
+                editable={!loadingChat && !generating && !editingBranch}
+                hasPrevious={messageHasPreviousSiblings(node.id) && !loadingChat && !generating && !editingBranch}
+                hasNext={messageHasNextSiblings(node.id) && !loadingChat && !generating && !editingBranch}
                 onEdit={() => {editUserMessage(node.id)}}
+                onPrevious={() => {gotoPreviousSibling(node.id)}}
+                onNext={() => {gotoNextSibling(node.id)}}
               />
             ))}
           {editingBranch && (

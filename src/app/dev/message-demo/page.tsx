@@ -16,7 +16,10 @@ export default function MessageDemoPage() {
   const [text, setText] = useState("你好，这是一条测试消息\n支持多行显示。");
   const [imageUrl, setImageUrl] = useState("");
   const [messageVersion, setMessageVersion] = useState(0); // force re-key if needed
+  const [showButtons, setShowButtons] = useState(false);
   const [enableEdit, setEnableEdit] = useState(false);
+  const [enablePrevious, setEnablePrevious] = useState(false);
+  const [enableNext, setEnableNext] = useState(false);
 
   const message: ServerTypes.Message = useMemo(() => {
     const content: ServerTypes.Message["content"] = [];
@@ -47,7 +50,17 @@ export default function MessageDemoPage() {
             {message.content.length === 0 ? (
               <div className="text-xs text-muted-foreground">当前消息为空。输入文本或启用图片。</div>
             ) : (
-              <Message key={messageVersion} message={message} editable={enableEdit} onEdit={()=>{console.log('Edit clicked')}}/>
+              <Message
+                key={messageVersion}
+                message={message}
+                showButtons={showButtons}
+                hasPrevious={enablePrevious}
+                hasNext={enableNext}
+                editable={enableEdit}
+                onPrevious={()=>console.log('Previous clicked')}
+                onNext={()=>console.log('Next clicked')}
+                onEdit={()=>{console.log('Edit clicked')}}
+              />
             )}
           </div>
         </div>
@@ -91,10 +104,40 @@ export default function MessageDemoPage() {
           <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
             <input
               type="checkbox"
+              checked={showButtons}
+              onChange={e => setShowButtons(e.target.checked)}
+              className="accent-ring"
+            /> 显示按钮
+          </label>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
               checked={enableEdit}
               onChange={e => setEnableEdit(e.target.checked)}
               className="accent-ring"
             /> 启用可编辑状态
+          </label>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={enablePrevious}
+              onChange={e => setEnablePrevious(e.target.checked)}
+              className="accent-ring"
+            /> 启用上一个
+          </label>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={enableNext}
+              onChange={e => setEnableNext(e.target.checked)}
+              className="accent-ring"
+            /> 启用下一个
           </label>
         </div>
         <div className="flex gap-2 pt-2">

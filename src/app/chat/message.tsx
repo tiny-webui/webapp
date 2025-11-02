@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import NextImage from "next/image";
+import ImageBlock from "@/components/custom/image-block";
+import MarkdownRenderer from "@/components/custom/markdown-renderer";
 import * as ServerTypes from "@/sdk/types/IServer";
 
 interface MessageProps {
@@ -14,38 +15,35 @@ export function Message({ message }: MessageProps) {
     throw new Error("Developer messages should not be rendered in the chat UI.");
   }
   const isUser = message.role === "user";
+  // Separate image and text/refusal blocks.
+  const imageBlocks = message.content.filter(part => part.type === "image_url");
+  const textBlocks = message.content.filter(part => part.type === "text" || part.type === "refusal");
+
+  // Concatenate text blocks with new lines.
+  const combinedText = textBlocks.map(part => part.data).join("\n");
+
+  // Image preview now handled by ImageBlock component.
+
   return (
-    <div
-      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-    >
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-[90%] rounded-lg px-4 py-2 ${
           isUser ? "bg-primary text-primary-foreground" : "bg-muted"
         }`}
       >
-        <div>
-          {message.content.map((contentPart, index) => {
-            if (contentPart.type === "text" || contentPart.type === "refusal") {
-              return (
-                <p key={index} className="text-sm whitespace-pre-wrap break-words break-all">
-                  {contentPart.data}
-                </p>
-              );
-            } else if (contentPart.type === "image_url") {
-              return (
-                <NextImage
-                  key={index}
-                  src={contentPart.data}
-                  alt="image"
-                  width={300}
-                  height={300}
-                  className="max-w-full h-auto"
-                />
-              );
-            }
-            return null;
-          })}
-        </div>
+        {/* Thumbnails row(s) */}
+        {imageBlocks.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {imageBlocks.map((img, idx) => (
+              <ImageBlock
+                key={idx}
+                src={img.data}
+                alt={`image ${idx + 1}`}
+              />
+            ))}
+          </div>
+        )}
+        <MarkdownRenderer content={combinedText}/>
       </div>
     </div>
   );

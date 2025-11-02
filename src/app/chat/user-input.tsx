@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-// Using a custom styled textarea instead of the single-line Input component.
+import ImageBlock from "@/components/custom/image-block";
 import { Send } from "lucide-react";
 import React from "react";
 import * as ServerTypes from "@/sdk/types/IServer";
@@ -14,9 +14,10 @@ interface UserInputProps {
 }
 
 export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
-  // @todo: future mixed text & image input support.
+  /** Text input */
   const [inputValue, setInputValue] = React.useState("");
-  // Resizable input height (textarea content box only)
+  /** Image data urls */
+  const [imageUrls, setImageUrls] = React.useState<string[]>([]);
   const [editorHeight, setEditorHeight] = React.useState<number>(140);
   const startYRef = React.useRef<number | null>(null);
   const startHeightRef = React.useRef<number>(0);
@@ -28,7 +29,7 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
 
   const beginDrag = (e: React.MouseEvent) => {
     startYRef.current = e.clientY;
-  startHeightRef.current = editorHeight;
+    startHeightRef.current = editorHeight;
     draggingRef.current = true;
     // Prevent text selection while dragging.
     document.body.style.userSelect = "none";
@@ -36,10 +37,12 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
 
   React.useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (!draggingRef.current || startYRef.current === null) return;
+      if (!draggingRef.current || startYRef.current === null) {
+        return;
+      }
       const delta = startYRef.current - e.clientY; // dragging up increases height
-  const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeightRef.current + delta));
-  setEditorHeight(newHeight);
+      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeightRef.current + delta));
+      setEditorHeight(newHeight);
     };
     const onUp = () => {
       draggingRef.current = false;
@@ -54,12 +57,35 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
     };
   }, [editorHeight]);
 
+  React.useEffect(() => {
+    const ta = textAreaRef.current;
+    if (ta) {
+      ta.style.height = "auto";
+      ta.style.height = `${ta.scrollHeight}px`;
+    }
+  }, [editorHeight, inputValue, imageUrls]);
+
   const handleSend = () => {
     const trimmed = inputValue.trim();
-    if (!trimmed) return;
-    // Format according to ServerTypes.Message shape.
-    onUserMessage({ role: "user", content: [{ type: "text", data: trimmed }] });
+    if (imageUrls.length === 0 && !trimmed) {
+      return;
+    }
+
+    const content: ServerTypes.Message["content"] = [];
+    if (imageUrls.length > 0) {
+      for (const url of imageUrls) {
+        content.push({ type: "image_url", data: url });
+      }
+    }
+    if (trimmed) {
+      content.push({ type: "text", data: trimmed });
+    }
+
+    onUserMessage({ role: "user", content });
+
+    setImageUrls([]);
     setInputValue("");
+
     // Refocus for subsequent typing.
     requestAnimationFrame(() => textAreaRef.current?.focus());
   };
@@ -73,7 +99,38 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
     }
   };
 
-  const sendDisabled = !inputEnabled || !inputValue.trim();
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!e.clipboardData) {
+      return;
+    }
+    const items = e.clipboardData.items;
+    const filePromises: Promise<string>[] = [];
+    for (const item of items) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        filePromises.push(new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        }));
+      }
+    }
+    if (filePromises.length > 0) {
+      e.preventDefault(); // Prevent any text insertion from clipboard when images are present.
+      Promise.all(filePromises)
+        .then(dataUrls => {
+          if (dataUrls.length === 0) {
+            return;
+          }
+          setImageUrls(prev => [...prev, ...dataUrls]);
+        })
+        .catch(() => {/* swallow errors; user can retry paste */});
+    }
+  };
+
+  const sendDisabled = !inputEnabled || (imageUrls.length === 0 && !inputValue.trim());
 
   return (
     <div className="border-t border-border p-4 relative select-none">
@@ -88,25 +145,45 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
           <div className="h-[2px] mt-[6px] rounded bg-muted-foreground/30" />
         </div>
       </div>
-  <div className="max-w-[900px] mx-auto flex flex-col justify-end">
-        <div className="flex items-end mb-2">
+      <div className="max-w-[900px] mx-auto flex flex-col justify-end">
+        <div className="flex items-end">
           <div className="flex-1 relative" style={{ height: editorHeight }}>
-            <textarea
-              ref={textAreaRef}
-              placeholder="请输入内容，Alt + Enter 发送"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={{ height: editorHeight, minHeight: MIN_HEIGHT, maxHeight: MAX_HEIGHT }}
+            <div
               className={cn(
-                "block w-full resize-none pr-24", // reserve space for send button
-                "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground",
-                "dark:bg-input/30 border-input rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none",
-                "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-                "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+                "absolute inset-0 flex flex-col overflow-y-auto rounded-md border border-input bg-transparent",
                 "scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent"
               )}
-            />
+            >
+              {imageUrls.length > 0 && (
+                <div className="p-2 flex flex-wrap gap-2">
+                  {imageUrls.map((src, idx) => (
+                    <ImageBlock
+                      key={idx}
+                      src={src}
+                      alt={`粘贴图片 ${idx + 1}`}
+                      removable
+                      onRemove={() => setImageUrls(prev => prev.filter((_, i) => i !== idx))}
+                    />
+                  ))}
+                </div>
+              )}
+              <textarea
+                ref={textAreaRef}
+                placeholder={imageUrls.length > 0 ? "继续输入文本，Alt + Enter 发送" : "请输入内容，Alt + Enter 发送 (支持粘贴图片)"}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                className={cn(
+                  "w-full resize-none",
+                  "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground",
+                  "dark:bg-input/30 bg-transparent px-3 py-2 text-sm outline-none flex-shrink-0",
+                  "focus-visible:border-none focus-visible:ring-0",
+                  imageUrls.length > 0 ? "pt-1" : "",
+                )}
+                rows={1}
+              />
+            </div>
             <div className="absolute right-2 bottom-2 flex items-center space-x-1">
               <Button
                 variant="ghost"

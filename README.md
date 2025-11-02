@@ -55,8 +55,8 @@ npm run build:static
 ```
 
 This script will:
-1. Temporarily move `src/app/dev` to `.dev-pages.stash` before `next build` / `next export`.
-2. Run `next build` followed by `next export` (output in `out/`).
+1. Temporarily move `src/app/dev` to `.dev-pages.stash` before `next build`.
+2. Run `next build` (which emits a fully static site to `out/` because of `output: 'export'` in the config).
 3. Restore the dev pages directory afterward so local development can continue.
 
 Artifacts `.dev-pages.stash` and marker `.dev-pages-removed` are git‑ignored.

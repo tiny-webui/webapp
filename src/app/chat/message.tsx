@@ -4,13 +4,16 @@ import React from "react";
 import ImageBlock from "@/components/custom/image-block";
 import MarkdownRenderer from "@/components/custom/markdown-renderer";
 import * as ServerTypes from "@/sdk/types/IServer";
+import { Button } from "@/components/ui/button";
+import { Pencil } from "lucide-react";
 
 interface MessageProps {
   message: ServerTypes.Message;
-  id?: string;
+  editable?: boolean;
+  onEdit?: () => void;
 }
 
-export function Message({ message }: MessageProps) {
+export function Message({ message, editable, onEdit }: MessageProps) {
   if (message.role === "developer") {
     throw new Error("Developer messages should not be rendered in the chat UI.");
   }
@@ -25,7 +28,7 @@ export function Message({ message }: MessageProps) {
   // Image preview now handled by ImageBlock component.
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} relative`}>
       <div
         className={`max-w-[90%] rounded-lg px-4 py-2 ${
           isUser ? "bg-primary text-primary-foreground" : "bg-muted"
@@ -43,8 +46,19 @@ export function Message({ message }: MessageProps) {
             ))}
           </div>
         )}
-        <MarkdownRenderer content={combinedText}/>
+        <MarkdownRenderer content={combinedText} />
       </div>
+      {editable && (
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Edit message"
+          onClick={() => onEdit && onEdit()}
+          className={`absolute bottom-0 translate-y-full ${isUser ? 'right-0' : 'left-0'}`}
+        >
+          <Pencil className="size-4" />
+        </Button>
+      )}
     </div>
   );
 }

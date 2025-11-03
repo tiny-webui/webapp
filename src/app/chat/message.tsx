@@ -4,13 +4,30 @@ import React from "react";
 import ImageBlock from "@/components/custom/image-block";
 import MarkdownRenderer from "@/components/custom/markdown-renderer";
 import * as ServerTypes from "@/sdk/types/IServer";
+import { Button } from "@/components/ui/button";
+import { Pencil, ArrowLeft, ArrowRight } from "lucide-react";
 
 interface MessageProps {
   message: ServerTypes.Message;
-  id?: string;
+  showButtons?: boolean;
+  editable?: boolean;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+  onEdit?: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
 }
 
-export function Message({ message }: MessageProps) {
+export function Message({
+  message,
+  showButtons,
+  editable,
+  hasPrevious,
+  hasNext,
+  onEdit,
+  onPrevious,
+  onNext,
+}: MessageProps) {
   if (message.role === "developer") {
     throw new Error("Developer messages should not be rendered in the chat UI.");
   }
@@ -25,9 +42,9 @@ export function Message({ message }: MessageProps) {
   // Image preview now handled by ImageBlock component.
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"} relative`}>
       <div
-        className={`max-w-[90%] rounded-lg px-4 py-2 ${
+        className={`max-w-[90%] rounded-lg px-4 py-2 z-0 ${
           isUser ? "bg-primary text-primary-foreground" : "bg-muted"
         }`}
       >
@@ -43,8 +60,41 @@ export function Message({ message }: MessageProps) {
             ))}
           </div>
         )}
-        <MarkdownRenderer content={combinedText}/>
+        <MarkdownRenderer content={combinedText} />
       </div>
+      {showButtons && (
+        <div
+          className={`absolute bottom-0 translate-y-full flex gap-0 z-10 ${isUser ? 'right-0' : 'left-0'}`}
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Previous message"
+            disabled={!hasPrevious}
+            onClick={() => hasPrevious && onPrevious && onPrevious()}
+          >
+            <ArrowLeft className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Next message"
+            disabled={!hasNext}
+            onClick={() => hasNext && onNext && onNext()}
+          >
+            <ArrowRight className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Edit message"
+            disabled={!editable}
+            onClick={() => editable && onEdit && onEdit()}
+          >
+            <Pencil className="size-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

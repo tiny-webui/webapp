@@ -15,26 +15,29 @@ export default function MessageDemoPage() {
   const [role, setRole] = useState<ServerTypes.Message["role"]>("user");
   const [text, setText] = useState("你好，这是一条测试消息\n支持多行显示。");
   const [imageUrl, setImageUrl] = useState("");
-  const [showImage, setShowImage] = useState(false);
   const [messageVersion, setMessageVersion] = useState(0); // force re-key if needed
+  const [showButtons, setShowButtons] = useState(false);
+  const [enableEdit, setEnableEdit] = useState(false);
+  const [enablePrevious, setEnablePrevious] = useState(false);
+  const [enableNext, setEnableNext] = useState(false);
 
   const message: ServerTypes.Message = useMemo(() => {
     const content: ServerTypes.Message["content"] = [];
     if (text.trim().length > 0) {
       content.push({ type: "text", data: text });
     }
-    if (showImage && imageUrl.trim()) {
+    if (imageUrl.trim()) {
       content.push({ type: "image_url", data: imageUrl.trim() });
     }
     return { role, content };
-  }, [role, text, showImage, imageUrl]);
+  }, [role, text, imageUrl]);
 
   const reset = useCallback(() => {
     setRole("user");
     setText("");
     setImageUrl("");
-    setShowImage(false);
     setMessageVersion(v => v + 1);
+    setEnableEdit(false);
   }, []);
 
   return (
@@ -47,7 +50,17 @@ export default function MessageDemoPage() {
             {message.content.length === 0 ? (
               <div className="text-xs text-muted-foreground">当前消息为空。输入文本或启用图片。</div>
             ) : (
-              <Message key={messageVersion} id={`demo-${messageVersion}`} message={message} />
+              <Message
+                key={messageVersion}
+                message={message}
+                showButtons={showButtons}
+                hasPrevious={enablePrevious}
+                hasNext={enableNext}
+                editable={enableEdit}
+                onPrevious={()=>console.log('Previous clicked')}
+                onNext={()=>console.log('Next clicked')}
+                onEdit={()=>{console.log('Edit clicked')}}
+              />
             )}
           </div>
         </div>
@@ -78,14 +91,6 @@ export default function MessageDemoPage() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-medium text-muted-foreground">图片选项 (image_url)</label>
-            <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={showImage}
-                onChange={e => setShowImage(e.target.checked)}
-                className="accent-ring"
-              /> 显示
-            </label>
           </div>
           <input
             type="text"
@@ -93,8 +98,47 @@ export default function MessageDemoPage() {
             onChange={e => setImageUrl(e.target.value)}
             placeholder="粘贴图片 URL (留空使用纯文本)"
             className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-            disabled={!showImage}
           />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showButtons}
+              onChange={e => setShowButtons(e.target.checked)}
+              className="accent-ring"
+            /> 显示按钮
+          </label>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={enableEdit}
+              onChange={e => setEnableEdit(e.target.checked)}
+              className="accent-ring"
+            /> 启用可编辑状态
+          </label>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={enablePrevious}
+              onChange={e => setEnablePrevious(e.target.checked)}
+              className="accent-ring"
+            /> 启用上一个
+          </label>
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs flex items-center gap-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={enableNext}
+              onChange={e => setEnableNext(e.target.checked)}
+              className="accent-ring"
+            /> 启用下一个
+          </label>
         </div>
         <div className="flex gap-2 pt-2">
           <Button size="sm" variant="secondary" onClick={reset}>重置</Button>

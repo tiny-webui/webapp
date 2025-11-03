@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { Button } from "@/components/ui/button";
 import * as ServerTypes from "@/sdk/types/IServer";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import { UserInput } from "./user-input";
@@ -30,6 +31,9 @@ export function Chat({
   const [tailNodeId, setTailNodeId] = useState<string | undefined>(undefined);
   const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.Message | undefined>(undefined);
   const [pendingAssistantMessage, setPendingAssistantMessage] = useState<ServerTypes.Message | undefined>(undefined);
+  const [editingBranch, setEditingBranch] = useState(false);
+  const [previousTailNodeId, setPreviousTailNodeId] = useState<string | undefined>(undefined);
+  const [messageToEdit, setMessageToEdit] = useState<ServerTypes.Message | undefined>(undefined);
   const syncChatHistoryCounter = useRef(0);
   const generatingCounter = useRef(0);
 
@@ -46,6 +50,9 @@ export function Chat({
       setTreeHistory({ nodes: {} });
       setTailNodeId(undefined);
       setLoadingChat(false);
+      setEditingBranch(false);
+      setPreviousTailNodeId(undefined);
+      setMessageToEdit(undefined);
       return;
     }
     setLoadingChat(true);
@@ -95,6 +102,9 @@ export function Chat({
     if (selectedModelId === undefined) {
       throw new Error("No model selected for chat.");
     }
+    setEditingBranch(false);
+    setPreviousTailNodeId(undefined);
+    setMessageToEdit(undefined);
     setPendingUserMessage(message);
     const originalCounter = ++generatingCounter.current;
     let callMismatch = false;
@@ -221,22 +231,107 @@ export function Chat({
     return nodes;
   }
 
+  const editUserMessage = useCallback((id: string) => {
+    setEditingBranch(true);
+    setPreviousTailNodeId(tailNodeId);
+    setTailNodeId(treeHistory.nodes[id].parent);
+    setMessageToEdit(treeHistory.nodes[id].message);
+  }, [tailNodeId, treeHistory]);
+
+  const cancelEditingUserMessage = useCallback(() => {
+    setEditingBranch(false);
+    setTailNodeId(previousTailNodeId);
+    setPreviousTailNodeId(undefined);
+    setMessageToEdit(undefined);
+  }, [previousTailNodeId]);
+
+  function getNodeSiblings(tree: ServerTypes.TreeHistory, nodeId: string): ServerTypes.MessageNode[] {
+    const parentId = tree.nodes[nodeId].parent;
+    if (parentId === undefined) {
+      /** Root node, find all root nodes in a stable order */
+      return Object.values(tree.nodes).filter(n => n.parent === undefined).sort((a, b) => a.timestamp - b.timestamp);
+    } else {
+      return tree.nodes[parentId].children.map(childId => tree.nodes[childId]);
+    }
+  }
+
+  function findLatestTailFromRoot(tree: ServerTypes.TreeHistory, rootId: string): ServerTypes.MessageNode {
+    let currentNode = tree.nodes[rootId];
+    while (currentNode.children.length > 0) {
+      const latestChild = currentNode.children
+        .map(childId => tree.nodes[childId])
+        .reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
+      currentNode = latestChild;
+    }
+    return currentNode;
+  }
+
+  const messageHasPreviousSiblings = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    return siblings.findIndex(n => n.id === id) > 0;
+  }, [treeHistory]);
+
+  const messageHasNextSiblings = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    const index = siblings.findIndex(n => n.id === id);
+    return index >= 0 && index < siblings.length - 1;
+  }, [treeHistory]);
+
+  const gotoPreviousSibling = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    const index = siblings.findIndex(n => n.id === id);
+    if (index <= 0) {
+      return;
+    }
+    const rootId = siblings[index - 1].id;
+    setTailNodeId(findLatestTailFromRoot(treeHistory, rootId).id);
+  }, [treeHistory, setTailNodeId]);
+
+  const gotoNextSibling = useCallback((id: string) => {
+    const siblings = getNodeSiblings(treeHistory, id);
+    const index = siblings.findIndex(n => n.id === id);
+    if (index < 0 || index >= siblings.length - 1) {
+      return;
+    }
+    const rootId = siblings[index + 1].id;
+    setTailNodeId(findLatestTailFromRoot(treeHistory, rootId).id);
+  }, [treeHistory, setTailNodeId]);
+
   return (
     <div className="flex-1 flex flex-col bg-background min-h-0">
       
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-[900px] mx-auto space-y-4">
-          { /** Chat history */}
           {getLinearHistory()
             .filter(n => n.message.role !== 'developer')
             .map(node => (
-              <Message key={node.id} id={node.id} message={node.message} />
+              <Message 
+                key={node.id}
+                message={node.message}
+                showButtons={node.message.role === 'user'}
+                editable={!loadingChat && !generating && !editingBranch}
+                hasPrevious={messageHasPreviousSiblings(node.id) && !loadingChat && !generating && !editingBranch}
+                hasNext={messageHasNextSiblings(node.id) && !loadingChat && !generating && !editingBranch}
+                onEdit={() => {editUserMessage(node.id)}}
+                onPrevious={() => {gotoPreviousSibling(node.id)}}
+                onNext={() => {gotoNextSibling(node.id)}}
+              />
             ))}
-          { /** Pending user message */ }
+          {editingBranch && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground/80">
+              <span>正在编辑</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={cancelEditingUserMessage}
+              >
+                取消
+              </Button>
+            </div>
+          )}
           {pendingUserMessage && (
             <Message key="pending-user-message" message={pendingUserMessage} />
           )}
-          { /** Pending assistant message */ }
           {pendingAssistantMessage && (
             <Message key="pending-assistant-message" message={pendingAssistantMessage} />
           )}
@@ -247,6 +342,7 @@ export function Chat({
       <UserInput
         onUserMessage={onUserMessage}
         inputEnabled={!loadingChat && !generating}
+        initialMessage={editingBranch ? messageToEdit : undefined}
       />
     </div>
   );

@@ -11,13 +11,22 @@ interface UserInputProps {
   onUserMessage: (message: ServerTypes.Message) => void;
   /** This controls the send button. Not the editor. */
   inputEnabled: boolean;
+  initialMessage?: ServerTypes.Message;
 }
 
-export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
+export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserInputProps) {
   /** Text input */
-  const [inputValue, setInputValue] = React.useState("");
+  const [inputValue, setInputValue] = React.useState(
+    initialMessage?.content
+      .filter(c => c.type === 'text' || c.type === 'refusal')
+      .map(c => c.data).join('\n') ?? ""
+  );
   /** Image data urls */
-  const [imageUrls, setImageUrls] = React.useState<string[]>([]);
+  const [imageUrls, setImageUrls] = React.useState<string[]>(
+    initialMessage?.content
+      .filter(c => c.type === 'image_url')
+      .map(c => c.data) ?? []
+  );
   const [editorHeight, setEditorHeight] = React.useState<number>(140);
   const startYRef = React.useRef<number | null>(null);
   const startHeightRef = React.useRef<number>(0);
@@ -34,6 +43,22 @@ export function UserInput({ onUserMessage, inputEnabled }: UserInputProps) {
     // Prevent text selection while dragging.
     document.body.style.userSelect = "none";
   };
+
+  React.useEffect(() => {
+    if (!initialMessage) {
+      return;
+    }
+    setInputValue(
+      initialMessage.content
+        .filter(c => c.type === 'text' || c.type === 'refusal')
+        .map(c => c.data).join('\n') ?? ""
+    );
+    setImageUrls(
+      initialMessage.content
+        .filter(c => c.type === 'image_url')
+        .map(c => c.data) ?? []
+    );
+  }, [initialMessage]);
 
   React.useEffect(() => {
     const onMove = (e: MouseEvent) => {

@@ -20,10 +20,8 @@ export default function SignIn() {
     
     if (!TUIClientSingleton.exists()) {
       TUIClientSingleton.create(
-        /** 
-         * @todo This is only for debug. Change to the ws' address for release.
-         */
-        `${window.location.hostname}:12345`,
+        /** `${window.location.hostname}:12345`, */ 
+        `${window.location.host}/api`,
         (error) => {
           /** @todo Handle disconnect properly */
           console.error("TUIClient connection error: ", error);

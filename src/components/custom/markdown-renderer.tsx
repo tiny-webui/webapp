@@ -7,7 +7,9 @@ import 'prism-themes/themes/prism-vsc-dark-plus.css'
 
 export default function MarkdownRenderer({ content }: { content: string }) {
   return (
-    <div className="markdown text-sm">
+    <div
+      className="markdown text-sm whitespace-pre-wrap break-words"
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         rehypePlugins={[rehypePrism]}

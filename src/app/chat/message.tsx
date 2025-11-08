@@ -44,8 +44,8 @@ export function Message({
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"} relative`}>
       <div
-        className={`max-w-[90%] rounded-lg px-4 py-2 z-0 ${
-          isUser ? "bg-primary text-primary-foreground" : "bg-muted"
+        className={`rounded-lg px-4 py-2 z-0 ${
+          isUser ? "bg-secondary max-w-[90%]" : "bg-background"
         }`}
       >
         {/* Thumbnails row(s) */}

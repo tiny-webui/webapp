@@ -71,7 +71,6 @@ export const ModifyModelDialog = ({ modelId, onComplete }: ModifyModelDialogProp
       }
       setProviderName(modelSettings.providerName as ProviderKey);
       setProviderParams(modelSettings.providerParams);
-      console.log(modelSettings);
       setLoaded(true);
     })();
     return () => { canceled = true; };

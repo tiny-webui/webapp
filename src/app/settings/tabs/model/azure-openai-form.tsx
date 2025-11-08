@@ -10,6 +10,7 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
   const [name, setName] = useState<string>(initialName ?? '');
   const [url, setUrl] = useState<string>(tryGetProperty(initialSettings, 'url', 'string') ?? '');
   const [apiKey, setApiKey] = useState<string>(tryGetProperty(initialSettings, 'apiKey', 'string') ?? '');
+  const [model, setModel] = useState<string>(tryGetProperty(initialSettings, 'model', 'string') ?? '');
   const [temperature, setTemperature] = useState<number|undefined>(tryGetProperty(initialSettings, 'temperature', 'number'));
 
   const canSubmit = name.trim() && url.trim() && apiKey.trim();
@@ -48,6 +49,15 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
         />
       </div>
       <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium" htmlFor="azure-model-url">URL</label>
+        <Input
+          id="azure-model-model"
+          placeholder="[可选] 模型id"
+          value={url}
+          onChange={(e) => setModel(e.target.value)}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
         <label className="text-sm font-medium" htmlFor="azure-model-key">API Key</label>
         <Input
           id="azure-model-temperature"
@@ -74,7 +84,8 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
                 {
                   url: url.trim(),
                   apiKey: apiKey.trim(),
-                  temperature: temperature
+                  temperature: temperature,
+                  model: model.trim() === '' ? model.trim() : undefined,
                 }
               )
             }}

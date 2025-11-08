@@ -27,14 +27,15 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
       .filter(c => c.type === 'image_url')
       .map(c => c.data) ?? []
   );
-  const [editorHeight, setEditorHeight] = React.useState<number>(140);
+
+  const MIN_HEIGHT = 80;
+  const MAX_HEIGHT = 400;
+
+  const [editorHeight, setEditorHeight] = React.useState<number>(MIN_HEIGHT);
   const startYRef = React.useRef<number | null>(null);
   const startHeightRef = React.useRef<number>(0);
   const draggingRef = React.useRef(false);
   const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
-
-  const MIN_HEIGHT = 80;
-  const MAX_HEIGHT = 400;
 
   const beginDrag = (e: React.MouseEvent) => {
     startYRef.current = e.clientY;
@@ -84,9 +85,14 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
 
   React.useEffect(() => {
     const ta = textAreaRef.current;
-    if (ta) {
+    const parent = ta?.parentElement;
+    if (ta && parent) {
+      const childRect = ta.getBoundingClientRect();
+      const parentRect = parent.getBoundingClientRect();
+      const maxVisibleHeight = parentRect.height - (childRect.top - parentRect.top) - 8;
       ta.style.height = "auto";
-      ta.style.height = `${ta.scrollHeight}px`;
+      const targetHeight = Math.max(ta.scrollHeight, maxVisibleHeight);
+      ta.style.height = `${targetHeight}px`;
     }
   }, [editorHeight, inputValue, imageUrls]);
 
@@ -194,7 +200,7 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
               )}
               <textarea
                 ref={textAreaRef}
-                placeholder={imageUrls.length > 0 ? "继续输入文本，Alt + Enter 发送" : "请输入内容，Alt + Enter 发送 (支持粘贴图片)"}
+                placeholder="请输入内容，Alt + Enter 发送"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}

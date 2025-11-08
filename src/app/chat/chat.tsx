@@ -34,8 +34,11 @@ export function Chat({
   const [editingBranch, setEditingBranch] = useState(false);
   const [previousTailNodeId, setPreviousTailNodeId] = useState<string | undefined>(undefined);
   const [messageToEdit, setMessageToEdit] = useState<ServerTypes.Message | undefined>(undefined);
+  const [userDetachedFromBottom, setUserDetachedFromBottom] = useState(false);
   const syncChatHistoryCounter = useRef(0);
   const generatingCounter = useRef(0);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const syncChatHistoryAsync = useCallback(async () => {
     if (generating) {
@@ -86,6 +89,22 @@ export function Chat({
       }
     }
   }, [activeChatId, tailNodeId, generating]);
+
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) {
+      return;
+    }
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    setUserDetachedFromBottom(distanceFromBottom > 50);
+  }, []);
+
+  useEffect(() => {
+    if (!(generating && userDetachedFromBottom)) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  /** Only trigger this effect if the pending messages change. */
+  }, [pendingUserMessage, pendingAssistantMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     syncChatHistoryAsync();
@@ -299,8 +318,11 @@ export function Chat({
 
   return (
     <div className="flex-1 flex flex-col bg-background min-h-0">
-      
-      <div className="flex-1 overflow-y-auto p-4">
+      <div
+        className="flex-1 overflow-y-auto p-4"
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+      >
         <div className="max-w-[900px] mx-auto space-y-4">
           {getLinearHistory()
             .filter(n => n.message.role !== 'developer')
@@ -335,6 +357,7 @@ export function Chat({
           {pendingAssistantMessage && (
             <Message key="pending-assistant-message" message={pendingAssistantMessage} />
           )}
+          <div ref={bottomRef} />
         </div>
       </div>
 

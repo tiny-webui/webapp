@@ -1,9 +1,27 @@
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkBreaks from 'remark-breaks'
-import rehypePrism from 'rehype-prism-plus'
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypePrism from 'rehype-prism-plus';
+import rehypeKatex from 'rehype-katex';
 
-import 'prism-themes/themes/prism-vsc-dark-plus.css'
+import 'prism-themes/themes/prism-vsc-dark-plus.css';
+import "katex/dist/katex.min.css";
+
+function NormalizeMathTags(input: string): string {
+  /** {@link https://www.assistant-ui.com/docs/guides/Latex}  */
+  return (
+    input
+      /** Convert [/math]...[/math] to $$...$$ */
+      .replace(/\[\/math\]([\s\S]*?)\[\/math\]/g, (_, content) => `$$${content}$$`)
+      /** Convert [/inline]...[/inline] to $...$ */
+      .replace(/\[\/inline\]([\s\S]*?)\[\/inline\]/g, (_, content) => `$${content}$`)
+      /** Convert \( ... \) to $...$ (inline math) - handles both single and double backslashes */
+      .replace(/\\{1,2}\(([\s\S]*?)\\{1,2}\)/g, (_, content) => `$${content}$`)
+      /** Convert \[ ... \] to $$...$$ (block math) - handles both single and double backslashes */
+      .replace(/\\{1,2}\[([\s\S]*?)\\{1,2}\]/g, (_, content) => `$$${content}$$`)
+  );
+}
 
 export default function MarkdownRenderer({ content }: { content: string }) {
   return (
@@ -11,8 +29,8 @@ export default function MarkdownRenderer({ content }: { content: string }) {
       className="markdown text-sm whitespace-pre-wrap break-words"
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        rehypePlugins={[[rehypePrism, { ignoreMissing: true }]]}
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+        rehypePlugins={[[rehypePrism, { ignoreMissing: true }], rehypeKatex]}
         components={{
           h1: (props) => <h1 className="text-2xl font-bold mt-5 mb-3" {...props} />,
           h2: (props) => <h2 className="text-xl font-semibold mt-4 mb-2" {...props} />,
@@ -27,7 +45,7 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           )
         }}
       >
-        {content}
+        {NormalizeMathTags(content)}
       </ReactMarkdown>
     </div>
   )

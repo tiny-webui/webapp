@@ -8,6 +8,21 @@ import rehypeKatex from 'rehype-katex';
 import 'prism-themes/themes/prism-vsc-dark-plus.css';
 import "katex/dist/katex.min.css";
 
+function NormalizeMathTags(input: string): string {
+  /** {@link https://www.assistant-ui.com/docs/guides/Latex}  */
+  return (
+    input
+      /** Convert [/math]...[/math] to $$...$$ */
+      .replace(/\[\/math\]([\s\S]*?)\[\/math\]/g, (_, content) => `$$${content}$$`)
+      /** Convert [/inline]...[/inline] to $...$ */
+      .replace(/\[\/inline\]([\s\S]*?)\[\/inline\]/g, (_, content) => `$${content}$`)
+      /** Convert \( ... \) to $...$ (inline math) - handles both single and double backslashes */
+      .replace(/\\{1,2}\(([\s\S]*?)\\{1,2}\)/g, (_, content) => `$${content}$`)
+      /** Convert \[ ... \] to $$...$$ (block math) - handles both single and double backslashes */
+      .replace(/\\{1,2}\[([\s\S]*?)\\{1,2}\]/g, (_, content) => `$$${content}$$`)
+  );
+}
+
 export default function MarkdownRenderer({ content }: { content: string }) {
   return (
     <div
@@ -30,7 +45,7 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           )
         }}
       >
-        {content}
+        {NormalizeMathTags(content)}
       </ReactMarkdown>
     </div>
   )

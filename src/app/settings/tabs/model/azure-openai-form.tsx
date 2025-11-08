@@ -10,6 +10,7 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
   const [name, setName] = useState<string>(initialName ?? '');
   const [url, setUrl] = useState<string>(tryGetProperty(initialSettings, 'url', 'string') ?? '');
   const [apiKey, setApiKey] = useState<string>(tryGetProperty(initialSettings, 'apiKey', 'string') ?? '');
+  const [temperature, setTemperature] = useState<number|undefined>(tryGetProperty(initialSettings, 'temperature', 'number'));
 
   const canSubmit = name.trim() && url.trim() && apiKey.trim();
 
@@ -39,11 +40,27 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
         <label className="text-sm font-medium" htmlFor="azure-model-key">API Key</label>
         <Input
           id="azure-model-key"
-          placeholder="输入 API Key"
+          placeholder="API Key"
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           required
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium" htmlFor="azure-model-key">API Key</label>
+        <Input
+          id="azure-model-temperature"
+          placeholder="[可选] temperature"
+          type="number"
+          value={temperature ?? ''}
+          onChange={(e) => {
+            let value: number|undefined = parseFloat(e.target.value);
+            if (Number.isNaN(value)) {
+              value = undefined;
+            }
+            setTemperature(value);
+          }}
         />
       </div>
       <div className="flex items-center justify-between gap-2 pt-2">
@@ -56,7 +73,8 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
                 name.trim(),
                 {
                   url: url.trim(),
-                  apiKey: apiKey.trim()
+                  apiKey: apiKey.trim(),
+                  temperature: temperature
                 }
               )
             }}

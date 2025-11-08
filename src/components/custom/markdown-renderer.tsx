@@ -12,7 +12,7 @@ export default function MarkdownRenderer({ content }: { content: string }) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
-        rehypePlugins={[rehypePrism]}
+        rehypePlugins={[[rehypePrism, { ignoreMissing: true }]]}
         components={{
           h1: (props) => <h1 className="text-2xl font-bold mt-5 mb-3" {...props} />,
           h2: (props) => <h2 className="text-xl font-semibold mt-4 mb-2" {...props} />,

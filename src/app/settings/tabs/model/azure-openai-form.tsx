@@ -28,7 +28,7 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
         />
       </div>
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium" htmlFor="azure-model-url">URL</label>
+        <label className="text-sm font-medium" htmlFor="azure-model-url">Full URL</label>
         <Input
           id="azure-model-url"
           placeholder="https://your-resource.openai.azure.com/..."
@@ -49,16 +49,16 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
         />
       </div>
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium" htmlFor="azure-model-url">URL</label>
+        <label className="text-sm font-medium" htmlFor="azure-model-url">Model</label>
         <Input
           id="azure-model-model"
           placeholder="[可选] 模型id"
-          value={url}
+          value={model}
           onChange={(e) => setModel(e.target.value)}
         />
       </div>
       <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium" htmlFor="azure-model-key">API Key</label>
+        <label className="text-sm font-medium" htmlFor="azure-model-key">Temperature</label>
         <Input
           id="azure-model-temperature"
           placeholder="[可选] temperature"

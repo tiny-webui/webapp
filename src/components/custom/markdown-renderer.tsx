@@ -1,9 +1,12 @@
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkBreaks from 'remark-breaks'
-import rehypePrism from 'rehype-prism-plus'
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypePrism from 'rehype-prism-plus';
+import rehypeKatex from 'rehype-katex';
 
-import 'prism-themes/themes/prism-vsc-dark-plus.css'
+import 'prism-themes/themes/prism-vsc-dark-plus.css';
+import "katex/dist/katex.min.css";
 
 export default function MarkdownRenderer({ content }: { content: string }) {
   return (
@@ -11,8 +14,8 @@ export default function MarkdownRenderer({ content }: { content: string }) {
       className="markdown text-sm whitespace-pre-wrap break-words"
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        rehypePlugins={[[rehypePrism, { ignoreMissing: true }]]}
+        remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
+        rehypePlugins={[[rehypePrism, { ignoreMissing: true }], rehypeKatex]}
         components={{
           h1: (props) => <h1 className="text-2xl font-bold mt-5 mb-3" {...props} />,
           h2: (props) => <h2 className="text-xl font-semibold mt-4 mb-2" {...props} />,

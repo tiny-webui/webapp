@@ -85,7 +85,7 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
                   url: url.trim(),
                   apiKey: apiKey.trim(),
                   temperature: temperature,
-                  model: model.trim() === '' ? model.trim() : undefined,
+                  model: model.trim() !== '' ? model.trim() : undefined,
                 }
               )
             }}

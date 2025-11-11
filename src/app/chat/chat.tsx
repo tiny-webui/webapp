@@ -182,7 +182,17 @@ export function Chat({
           };
           setTreeHistory(prev => ({
             nodes: {
-              ...prev.nodes,
+              ...Object.fromEntries(Object.entries(prev.nodes).map(([i, n]) => {
+                /** React calls this twice.. */
+                if (n.id === tailNodeId && n.children.indexOf(userMessageNode.id) < 0) {
+                  return [i, {
+                    ...n,
+                    children: [...n.children, userMessageNode.id]
+                  }]
+                } else {
+                  return [i, n];
+                }
+              })),
               [userMessageNode.id]: userMessageNode,
               [assistantMessageNode.id]: assistantMessageNode,
             }

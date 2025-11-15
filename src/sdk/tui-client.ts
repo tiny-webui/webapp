@@ -181,8 +181,9 @@ export class TUIClient implements types.IServer {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
+        /** Incrase timeout to 2min for thinking models. */
         const generator = this.#rpcClient.makeStreamRequestAsync<types.ChatCompletionParams, string, types.ChatCompletionInfo>(
-            'chatCompletion', params);
+            'chatCompletion', params, 120_000);
         while (true) {
             const it = await generator.next();
             if (it.done === true) {

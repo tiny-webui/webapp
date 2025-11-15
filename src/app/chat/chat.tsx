@@ -96,15 +96,21 @@ export function Chat({
       return;
     }
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    setUserDetachedFromBottom(distanceFromBottom > 50);
+    setUserDetachedFromBottom(distanceFromBottom > 30);
   }, []);
 
   useEffect(() => {
-    if (!(generating && userDetachedFromBottom)) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!generating || !bottomRef.current) {
+      return;
     }
-  /** Only trigger this effect if the pending messages change. */
-  }, [pendingUserMessage, pendingAssistantMessage]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (pendingAssistantMessage?.content.length === 1 && pendingAssistantMessage.content[0].data === '') {
+      /** The user just input text. Jump to the bottom */
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    } else if (!userDetachedFromBottom) {
+      /** Generating and the user does not leave the bottom */
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [pendingUserMessage, pendingAssistantMessage, generating, userDetachedFromBottom]);
 
   useEffect(() => {
     syncChatHistoryAsync();
@@ -367,7 +373,21 @@ export function Chat({
           {pendingAssistantMessage && (
             <Message key="pending-assistant-message" message={pendingAssistantMessage} />
           )}
-          <div ref={bottomRef} />
+          {generating && (
+            <div ref={bottomRef} className="flex min-h-[24px] items-end">
+              <div className="ml-4 flex items-end gap-2" role="status" aria-label="Generating">
+                <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground" />
+                <span
+                  className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground"
+                  style={{ animationDelay: "150ms" }}
+                />
+                <span
+                  className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground"
+                  style={{ animationDelay: "300ms" }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

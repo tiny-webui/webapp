@@ -12,7 +12,7 @@ enum RegistrationTlvType {
 export function register(params :{
     username: string;
     password: string;
-    publicMetadata: { [key: string]: unknown };
+    publicMetadata?: { [key: string]: unknown };
 }): string {
     /** @todo Run this in another thread? This will keep the CPU busy for a short while. */
     const { w0, L, salt } = spake2p.register(params.username, params.password);
@@ -21,6 +21,8 @@ export function register(params :{
     tlv.setElement(RegistrationTlvType.Salt, salt);
     tlv.setElement(RegistrationTlvType.w0, w0);
     tlv.setElement(RegistrationTlvType.L, L);
-    tlv.setElement(RegistrationTlvType.PublicMetadata, new TextEncoder().encode(JSON.stringify(params.publicMetadata)));
+    if (params.publicMetadata !== undefined) {
+        tlv.setElement(RegistrationTlvType.PublicMetadata, new TextEncoder().encode(JSON.stringify(params.publicMetadata)));
+    }
     return Buffer.from(tlv.serialize()).toString('base64');
 }

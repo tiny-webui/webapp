@@ -10,6 +10,7 @@ import { UiSettings } from "./tabs/ui-settings";
 import { ChatSettings } from "./tabs/chat-settings";
 import { ModelSettings } from "./tabs/model-settings";
 import { GlobalSettings } from "./tabs/global-settings";
+import { UserSettings } from "./tabs/user-settings";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 
 const structure = [
@@ -27,6 +28,7 @@ const structure = [
     children: [
       { id: "model", label: "模型管理" },
       { id: "global", label: "全局设置" },
+      { id: "user", label: "用户管理" },
     ],
   },
 ] as const;
@@ -136,6 +138,7 @@ export default function SettingsPage() {
             {currentTab === "chat" && <ChatSettings />}
             {currentTab === "model" && isAdmin && <ModelSettings />}
             {currentTab === "global" && isAdmin && <GlobalSettings />}
+            {currentTab === "user" && isAdmin && <UserSettings />}
           </div>
         </div>
       </div>

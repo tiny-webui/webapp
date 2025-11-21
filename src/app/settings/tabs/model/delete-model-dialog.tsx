@@ -35,11 +35,11 @@ export const DeleteModelDialog = ({ modelInfo, onComplete }: DeleteModelDialogPr
 		>
 			{(deleting) && (
 				<div className="flex w-full items-center justify-center py-8 gap-3 select-none" aria-live="polite">
-					<div className="relative h-8 w-8" role="status" aria-label={deleting ? '正在删除' : '正在加载'}>
+					<div className="relative h-8 w-8" role="status" aria-label="正在删除">
 						<div className="absolute inset-0 rounded-full border-4 border-muted opacity-30" />
 						<div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin" />
 					</div>
-					<span className="text-sm text-muted-foreground">{deleting ? '删除中...' : '加载中...'}</span>
+					<span className="text-sm text-muted-foreground">删除中...</span>
 				</div>
 			)}
 			{(!deleting) && (

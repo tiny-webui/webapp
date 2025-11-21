@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Eye, EyeOff, Mail, Lock, CheckCircle, ArrowRight } from "lucide-react";
-import { register } from "@/sdk/registration"
+import { getRegistrationString } from "@/sdk/registration"
 
 async function copyToClipboard(text: string) {
   if (navigator.clipboard) {
@@ -94,7 +94,7 @@ export default function SignUp() {
     
     try {
       /** This should be considered as user credential. DO NOT log it or keep it in ram!!! */
-      const registrationString = register({
+      const registrationString = getRegistrationString({
         username: formData.email,
         password: formData.password
       });

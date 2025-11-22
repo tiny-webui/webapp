@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { Eye, EyeOff, Mail, Lock, User, CheckCircle, ArrowRight } from "lucide-react";
-import { register } from "@/sdk/registration"
+import { Eye, EyeOff, Mail, Lock, CheckCircle, ArrowRight } from "lucide-react";
+import { getRegistrationString } from "@/sdk/registration"
 
 async function copyToClipboard(text: string) {
   if (navigator.clipboard) {
@@ -49,7 +49,6 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
-    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -60,10 +59,6 @@ export default function SignUp() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-
-    if (formData.username.trim() === "") {
-      newErrors.username = "请输入用户名";
-    }
 
     if (formData.email.trim() === "") {
       newErrors.email = "请输入邮箱地址";
@@ -99,10 +94,9 @@ export default function SignUp() {
     
     try {
       /** This should be considered as user credential. DO NOT log it or keep it in ram!!! */
-      const registrationString = register({
+      const registrationString = getRegistrationString({
         username: formData.email,
-        password: formData.password,
-        publicMetadata: { displayName: formData.username }
+        password: formData.password
       });
       await copyToClipboard(registrationString);
       setShowSuccessModal(true);
@@ -142,27 +136,6 @@ export default function SignUp() {
       {/* Registration Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-4">
-          {/* User name */}
-          <div className="space-y-2">
-            <label htmlFor="username" className="text-sm font-medium text-foreground">
-              用户名
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground size-4" />
-              <Input
-                id="username"
-                type="text"
-                placeholder="请输入用户名"
-                value={formData.username}
-                onChange={(e) => handleInputChange("username", e.target.value)}
-                className={`pl-10 ${errors.username ? "border-destructive" : ""}`}
-                required
-              />
-            </div>
-            {errors.username && (
-              <p className="text-sm text-destructive">{errors.username}</p>
-            )}
-          </div>
 
           {/* Email */}
           <div className="space-y-2">

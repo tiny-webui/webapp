@@ -537,10 +537,9 @@ export class TUIClient implements types.IServer {
                 return list ?? [];
             }, ['modelList']);
         }
-        if (params.path[0] === 'userPublic') {
-            /** This is admin only */
+        else if (params.path[0] === 'userPublic') {
             this.#cache.update<types.GetUserListResult>(list => {
-                const user = list?.find(u => u.isSelf);
+                const user = list?.find(u => u.id === params.path[1]) ?? list?.find(u => u.isSelf);
                 if (user !== undefined) {
                     user.publicMetadata = {
                         ...user.publicMetadata,
@@ -550,7 +549,19 @@ export class TUIClient implements types.IServer {
                 return list ?? [];
             }, ['userList']);
         }
-        if (params.path[0] === 'chat') {
+        else if (params.path[0] === 'userAdmin') {
+            this.#cache.update<types.GetUserListResult>(list => {
+                const user = list?.find(u => u.id === params.path[1]);
+                if (user !== undefined) {
+                    user.adminMetadata = {
+                        ...user.adminMetadata,
+                        ...params.entries
+                    };
+                }
+                return list ?? [];
+            }, ['userList']);
+        }
+        else if (params.path[0] === 'chat') {
             const chatId = params.path[1];
             this.#chatListCache.update(
                 chat => chat.id === chatId,
@@ -587,10 +598,9 @@ export class TUIClient implements types.IServer {
                 return list ?? [];
             }, ['modelList']);
         }
-        if (params.path[0] === 'userPublic') {
-            /** This is admin only */
+        else if (params.path[0] === 'userPublic') {
             this.#cache.update<types.GetUserListResult>(list => {
-                const user = list?.find(u => u.isSelf);
+                const user = list?.find(u => u.id === params.path[1]) ?? list?.find(u => u.isSelf);
                 if (user !== undefined) {
                     user.publicMetadata = {
                         ...user.publicMetadata,
@@ -600,7 +610,19 @@ export class TUIClient implements types.IServer {
                 return list ?? [];
             }, ['userList']);
         }
-        if (params.path[0] === 'chat') {
+        else if (params.path[0] === 'userAdmin') {
+            this.#cache.update<types.GetUserListResult>(list => {
+                const user = list?.find(u => u.id === params.path[1]);
+                if (user !== undefined) {
+                    user.adminMetadata = {
+                        ...user.adminMetadata,
+                        ...metadata
+                    };
+                }
+                return list ?? [];
+            }, ['userList']);
+        }
+        else if (params.path[0] === 'chat') {
             const chatId = params.path[1];
             this.#chatListCache.update(
                 chat => chat.id === chatId,
@@ -637,10 +659,9 @@ export class TUIClient implements types.IServer {
                 return list ?? [];
             }, ['modelList']);
         }
-        if (params.path[0] === 'userPublic') {
-            /** This is admin only */
+        else if (params.path[0] === 'userPublic') {
             this.#cache.update<types.GetUserListResult>(list => {
-                const user = list?.find(u => u.isSelf);
+                const user = list?.find(u => u.id === params.path[1]) ?? list?.find(u => u.isSelf);
                 if (user?.publicMetadata !== undefined) {
                     for (const key of params.keys) {
                         delete user.publicMetadata[key];
@@ -649,7 +670,18 @@ export class TUIClient implements types.IServer {
                 return list ?? [];
             }, ['userList']);
         }
-        if (params.path[0] === 'chat') {
+        else if (params.path[0] === 'userAdmin') {
+            this.#cache.update<types.GetUserListResult>(list => {
+                const user = list?.find(u => u.id === params.path[1]);
+                if (user?.adminMetadata !== undefined) {
+                    for (const key of params.keys) {
+                        delete user.adminMetadata[key];
+                    }
+                }
+                return list ?? [];
+            }, ['userList']);
+        }
+        else if (params.path[0] === 'chat') {
             const chatId = params.path[1];
             this.#chatListCache.update(
                 chat => chat.id === chatId,

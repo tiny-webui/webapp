@@ -5,33 +5,32 @@ import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import { TUIClientSingleton } from '@/lib/tui-client-singleton';
 
-export interface DeleteModelDialogProps {
-  modelInfo: {
-    id: string;
-    name: string;
-  };
-  onComplete: () => void; // UI-only for now
+export interface DeleteUserDialogProps {
+  userId: string;
+  email: string;
+  onComplete: () => void;
 }
 
-export const DeleteModelDialog = ({ modelInfo, onComplete }: DeleteModelDialogProps) => {
+export const DeleteUserDialog = ({ userId, email, onComplete }: DeleteUserDialogProps) => {
   const [deleting, setDeleting] = useState(false);
 
-  const deleteModelAsync = useCallback(async () => {
+  const handleDelete = useCallback(async () => {
     setDeleting(true);
     try {
-      await TUIClientSingleton.get().deleteModelAsync(modelInfo.id);
+      console.log('Deleting user', userId);
+      await TUIClientSingleton.get().deleteUserAsync(userId);
     } catch (err) {
-      console.error('Failed to delete model', err);
+      console.error('Failed to delete user', err);
     } finally {
       onComplete();
     }
-  }, [modelInfo, onComplete]);
+  }, [userId, onComplete]);
 
   return (
     <Modal
       isOpen={true}
       onClose={onComplete}
-      title={"删除模型"}
+      title="删除用户"
     >
       {(deleting) && (
         <div className="flex w-full items-center justify-center py-8 gap-3 select-none" aria-live="polite">
@@ -45,13 +44,14 @@ export const DeleteModelDialog = ({ modelInfo, onComplete }: DeleteModelDialogPr
       {(!deleting) && (
         <div className="flex flex-col gap-6">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            确定删除模型<span className="font-medium text-foreground">“{modelInfo.name}”</span>吗？
+            是否确认删除用户: <span className="font-medium text-foreground">“{email}”</span>?<br/>
+            这将永久删除该用户数据。
           </p>
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={onComplete} disabled={deleting}>
+            <Button variant="outline" onClick={onComplete}>
               取消
             </Button>
-            <Button type="button" variant="destructive" onClick={deleteModelAsync} disabled={deleting}>
+            <Button variant="destructive" onClick={handleDelete}>
               删除
             </Button>
           </div>
@@ -60,4 +60,3 @@ export const DeleteModelDialog = ({ modelInfo, onComplete }: DeleteModelDialogPr
     </Modal>
   );
 };
-

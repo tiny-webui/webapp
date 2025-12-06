@@ -5,7 +5,7 @@ import remarkMath from 'remark-math';
 import rehypePrism from 'rehype-prism-plus';
 import rehypeKatex from 'rehype-katex';
 
-import 'github-markdown-css/github-markdown.css';
+import './github-markdown.css';
 import './prism-ghcolors-auto.css';
 import "katex/dist/katex.min.css";
 

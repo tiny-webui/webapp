@@ -34,4 +34,13 @@ try { greet('world'); } catch (err) { console.error(err); } // try/catch keyword
 - old line    # deleted -> color #9a050f
 + new line    # inserted -> color #36acaa
 ```
+
+`Inline code`
+
+```c++
+int main (int argc, char* const* argv)
+{
+    return 1;
+}
 ```
+

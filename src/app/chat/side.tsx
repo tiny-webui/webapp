@@ -131,7 +131,7 @@ export function Side({
   }, []);
 
   return (
-    <div className="w-80 bg-zinc-50 border-r border-border flex flex-col">
+    <div className="w-80 bg-sidebar border-r border-border flex flex-col">
       {/* Logo and settings button */}
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">

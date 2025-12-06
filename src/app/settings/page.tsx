@@ -82,7 +82,7 @@ export default function SettingsPage() {
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar styled like chat side */}
-      <aside className="w-80 bg-zinc-50 border-r border-border flex flex-col">
+      <aside className="w-80 bg-sidebar border-r border-border flex flex-col">
         {/* Logo area (same spacing as chat) */}
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">

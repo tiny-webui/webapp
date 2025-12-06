@@ -6,8 +6,7 @@ import rehypePrism from 'rehype-prism-plus';
 import rehypeKatex from 'rehype-katex';
 
 import 'github-markdown-css/github-markdown.css';
-/** @todo: This will not work for dark mode. */
-import 'prism-themes/themes/prism-ghcolors.css';
+import './prism-ghcolors-auto.css';
 import "katex/dist/katex.min.css";
 
 function NormalizeMathTags(input: string): string {

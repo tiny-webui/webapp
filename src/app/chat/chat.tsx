@@ -8,7 +8,9 @@ import { UserInput } from "./user-input";
 import { Message } from "./message";
 
 interface ChatProps {
-  onCreateChat: (chatInfo: ServerTypes.GetChatListResult[0]) => void;
+  onCreateChat: (chatId: string) => void;
+  onSetChatTitle: (chatId: string, title: string) => void;
+  onSwitchChat: (chatId: string) => void;
   activeChatId?: string;
   selectedModelId?: string;
   titleGenerationModelId?: string;
@@ -16,6 +18,8 @@ interface ChatProps {
 
 export function Chat({ 
   onCreateChat,
+  onSetChatTitle,
+  onSwitchChat,
   activeChatId,
   selectedModelId,
   titleGenerationModelId
@@ -102,7 +106,7 @@ export function Chat({
     }
   }, [pendingUserMessage, pendingAssistantMessage, generating, userDetachedFromBottom]);
 
-  const generateChatTitleAndNotifyNewChatAsync = useCallback(async (chatId: string, message: ServerTypes.Message) => {
+  const generateChatTitleAsync = useCallback(async (chatId: string, message: ServerTypes.Message) => {
     const modelId = titleGenerationModelId ?? selectedModelId;
     if (modelId === undefined) {
       throw new Error("No model selected for title generation.");
@@ -127,13 +131,8 @@ export function Chat({
         title: title 
       }
     });
-    onCreateChat({
-      id: chatId,
-      metadata: {
-        title: title
-      }
-    });
-  }, [onCreateChat, selectedModelId, titleGenerationModelId]);
+    onSetChatTitle(chatId, title);
+  }, [onSetChatTitle, selectedModelId, titleGenerationModelId]);
 
   const onUserMessage = useCallback(async (message: ServerTypes.Message) => {
     if (loadingChat || generating) {
@@ -170,8 +169,9 @@ export function Chat({
         isNewChat = true;
         /** @todo This may throw CONFLICT. If so, we need to request a chat list update and retry. */
         chatId = await TUIClientSingleton.get().newChatAsync();
+        onCreateChat(chatId);
         /** Do the chat title generation concurrently */
-        generateChatTitleAndNotifyNewChatAsync(chatId, message);
+        generateChatTitleAsync(chatId, message);
       }
       /** 
        * This step should start even on mismatch to ensure a concise chat history
@@ -224,6 +224,9 @@ export function Chat({
           setTailNodeId(assistantMessageNode.id);
           setPendingUserMessage(undefined);
           setPendingAssistantMessage(undefined);
+          if (isNewChat) {
+            onSwitchChat(chatId);
+          }
           break;
         } else {
           assistantMessage.content[0].data = assistantMessage.content[0].data + result.value;
@@ -235,7 +238,7 @@ export function Chat({
         setGenerating(false);
       }
     }
-  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, generateChatTitleAndNotifyNewChatAsync]);
+  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, onCreateChat, onSwitchChat, generateChatTitleAsync]);
 
   const getLinearHistory = useCallback(() : ServerTypes.MessageNode[] => {
     const nodes: ServerTypes.MessageNode[] = [];

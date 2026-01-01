@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./chat";
 import { ChatMenuBar } from "./menu-bar";
 import { Side } from "./side";
@@ -32,13 +32,30 @@ export default function ChatPage() {
     maxDisplayedChatIndex.current = max;
   }
 
-  function onCreateChat(chatInfo: ServerTypes.GetChatListResult[0]) {
+  const onCreateChat = useCallback((chatId: string) => {
+    const chatInfo = {
+      id: chatId
+    };
     setChatList([chatInfo, ...chatList]);
-    if (activeChatId === undefined) {
-      /** Focus on the newly created chat if we are not on another chat already. */
-      setActiveChatId(chatInfo.id);
-    }
-  }
+  }, [chatList]);
+
+  const onSetChatTitle = useCallback((chatId: string, title: string) => {
+    setChatList(prevList => {
+      return prevList.map(chat => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            metadata: {
+              ...chat.metadata,
+              title: title,
+            },
+          };
+        } else {
+          return chat;
+        }
+      });
+    });
+  }, []);
 
   async function updateChatListAsync(fromStart?: boolean) {
     /** Allow two trials in case of resource conflict */
@@ -149,6 +166,8 @@ export default function ChatPage() {
         <Chat
           key={activeChatId}
           onCreateChat={onCreateChat}
+          onSetChatTitle={onSetChatTitle}
+          onSwitchChat={onSwitchChat}
           activeChatId={activeChatId}
           selectedModelId={selectedModelId}
           titleGenerationModelId={titleGenerationModelId}

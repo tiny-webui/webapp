@@ -8,25 +8,25 @@ import { UserInput } from "./user-input";
 import { Message } from "./message";
 
 interface ChatProps {
-  onCreateChat: (chatId: string) => void;
+  onCreateChat: (chatId: string, message: ServerTypes.Message) => void;
   onSetChatTitle: (chatId: string, title: string) => void;
-  onSwitchChat: (chatId: string) => void;
   activeChatId?: string;
   selectedModelId?: string;
   titleGenerationModelId?: string;
+  initialUserMessage?: ServerTypes.Message;
 }
 
 export function Chat({ 
   onCreateChat,
   onSetChatTitle,
-  onSwitchChat,
   activeChatId,
   selectedModelId,
-  titleGenerationModelId
+  titleGenerationModelId,
+  initialUserMessage
 }: ChatProps) {
 
   const [generating, setGenerating] = useState(false);
-  const [loadingChat, setLoadingChat] = useState(true);
+  const [loadingChat, setLoadingChat] = useState(false);
   const [treeHistory, setTreeHistory] = useState<ServerTypes.TreeHistory>({ nodes: {} });
   const [tailNodeId, setTailNodeId] = useState<string | undefined>(undefined);
   const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.Message | undefined>(undefined);
@@ -35,54 +35,11 @@ export function Chat({
   const [previousTailNodeId, setPreviousTailNodeId] = useState<string | undefined>(undefined);
   const [messageToEdit, setMessageToEdit] = useState<ServerTypes.Message | undefined>(undefined);
   const [userDetachedFromBottom, setUserDetachedFromBottom] = useState(false);
+  const initialUserMessageHandled = useRef(false);
+  const initializationCalled = useRef(false);
   const generatingCounter = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(()=>{
-    let cancelled = false;
-
-    (async () => {
-      if (!activeChatId) {
-        setTreeHistory({ nodes: {} });
-        setTailNodeId(undefined);
-        setLoadingChat(false);
-        setEditingBranch(false);
-        setPreviousTailNodeId(undefined);
-        setMessageToEdit(undefined);
-        return;
-      }
-      try {
-        const loadedTreeHistory = await TUIClientSingleton.get().getChatAsync(activeChatId);
-        if (cancelled) {
-          return;
-        }
-        setTreeHistory(loadedTreeHistory);
-        if (Object.keys(loadedTreeHistory.nodes).length === 0) {
-          setTailNodeId(undefined);
-        } else {
-          /** Use the node with the latest timestamp as the tail */
-          let latestNode = Object.values(loadedTreeHistory.nodes).reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
-          /** 
-           * Do a sanity check by go to one of the true ends where the "latest" node may lead to. 
-           * Avoiding potential inconsistent timestamp. 
-           */
-          while (latestNode.children.length > 0) {
-            latestNode = loadedTreeHistory.nodes[latestNode.children[0]];
-          }
-          setTailNodeId(latestNode.id);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingChat(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    }
-  }, [activeChatId]);
 
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -152,6 +109,13 @@ export function Chat({
     let callMismatch = false;
     setGenerating(true);
     try {
+      let chatId = activeChatId;
+      if (chatId === undefined) {
+        /** @todo This may throw CONFLICT. If so, we need to request a chat list update and retry. */
+        chatId = await TUIClientSingleton.get().newChatAsync();
+        onCreateChat(chatId, message);
+        return;
+      }
       const assistantMessage: ServerTypes.Message = {
         role: 'assistant',
         content: [
@@ -163,23 +127,13 @@ export function Chat({
       };
       const userMessageTimestamp = Date.now();
       setPendingAssistantMessage(assistantMessage);
-      let chatId = activeChatId;
-      let isNewChat = false;
-      if (chatId === undefined) {
-        isNewChat = true;
-        /** @todo This may throw CONFLICT. If so, we need to request a chat list update and retry. */
-        chatId = await TUIClientSingleton.get().newChatAsync();
-        onCreateChat(chatId);
-        /** Do the chat title generation concurrently */
-        generateChatTitleAsync(chatId, message);
-      }
       /** 
        * This step should start even on mismatch to ensure a concise chat history
        * @todo: This may throw CONFLICT. If so, we need to update the local history and notify the user about this.
        */
       const generator = TUIClientSingleton.get().chatCompletionAsync({
         id: chatId,
-        parent: isNewChat ? undefined : tailNodeId,
+        parent: tailNodeId,
         modelId: selectedModelId,
         userMessage: message
       });
@@ -224,9 +178,6 @@ export function Chat({
           setTailNodeId(assistantMessageNode.id);
           setPendingUserMessage(undefined);
           setPendingAssistantMessage(undefined);
-          if (isNewChat) {
-            onSwitchChat(chatId);
-          }
           break;
         } else {
           assistantMessage.content[0].data = assistantMessage.content[0].data + result.value;
@@ -238,7 +189,63 @@ export function Chat({
         setGenerating(false);
       }
     }
-  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, onCreateChat, onSwitchChat, generateChatTitleAsync]);
+  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, onCreateChat]);
+
+  useEffect(()=>{
+    /** Avoid react's stupid load twice policy in debug mode which messes up the server. */
+    if (initializationCalled.current) {
+      return;
+    }
+    initializationCalled.current = true;
+
+    console.log("Loading chat history for chat id:", activeChatId);
+    (async () => {
+      if (!activeChatId) {
+        /** No chat */
+        setTreeHistory({ nodes: {} });
+        setTailNodeId(undefined);
+        setLoadingChat(false);
+        setEditingBranch(false);
+        setPreviousTailNodeId(undefined);
+        setMessageToEdit(undefined);
+        return;
+      }
+      if (initialUserMessage && !initialUserMessageHandled.current) {
+        
+        console.log("Handling initial user message for new chat:", activeChatId, initialUserMessage);
+
+        /** New chat */
+        initialUserMessageHandled.current = true;
+        onUserMessage(initialUserMessage);
+        /** generate chat title concurrently */
+        generateChatTitleAsync(activeChatId, initialUserMessage);
+        return;
+      }
+      /** Existing chat */
+      setLoadingChat(true);
+      try {
+        const loadedTreeHistory = await TUIClientSingleton.get().getChatAsync(activeChatId);
+        setTreeHistory(loadedTreeHistory);
+        if (Object.keys(loadedTreeHistory.nodes).length === 0) {
+          setTailNodeId(undefined);
+        } else {
+          /** Use the node with the latest timestamp as the tail */
+          let latestNode = Object.values(loadedTreeHistory.nodes).reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
+          /** 
+           * Do a sanity check by go to one of the true ends where the "latest" node may lead to. 
+           * Avoiding potential inconsistent timestamp. 
+           */
+          while (latestNode.children.length > 0) {
+            latestNode = loadedTreeHistory.nodes[latestNode.children[0]];
+          }
+          setTailNodeId(latestNode.id);
+        }
+      } finally {
+        setLoadingChat(false);
+      }
+    })();
+  /** Only load once */
+  }, []);
 
   const getLinearHistory = useCallback(() : ServerTypes.MessageNode[] => {
     const nodes: ServerTypes.MessageNode[] = [];

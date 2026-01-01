@@ -20,23 +20,27 @@ export default function ChatPage() {
   const [titleGenerationModelId, setTitleGenerationModelId] = useState<string|undefined>(undefined);
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
   const [initialized, setInitialized] = useState(false);
+  const [newChatUserMessage, setNewChatUserMessage] = useState<ServerTypes.Message|undefined>(undefined);
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
   const updateChatListPromise = useRef<Promise<void>|undefined>(undefined);
 
-  function onSwitchChat(chatId: string | undefined) {
+  const onSwitchChat = useCallback((chatId: string | undefined) => {
     setActiveChatId(chatId);
-  }
+    setNewChatUserMessage(undefined);
+  }, []);
 
   function onChatDisplayRangeChange(max: number) {
     maxDisplayedChatIndex.current = max;
   }
 
-  const onCreateChat = useCallback((chatId: string) => {
+  const onCreateChat = useCallback((chatId: string, message: ServerTypes.Message) => {
     const chatInfo = {
       id: chatId
     };
     setChatList([chatInfo, ...chatList]);
+    setActiveChatId(chatId);
+    setNewChatUserMessage(message);
   }, [chatList]);
 
   const onSetChatTitle = useCallback((chatId: string, title: string) => {
@@ -72,7 +76,7 @@ export default function ChatPage() {
         setChatList(newList);
         if (newList.find(c => c.id === activeChatId) === undefined) {
           /** The active chat was deleted */
-          setActiveChatId(undefined);
+          onSwitchChat(undefined);
         }
         return;
       } catch (error) {
@@ -161,16 +165,16 @@ export default function ChatPage() {
           onSelectedModelIdChange={setSelectedModelId}
           isSidebarVisible={isSidebarVisible}
           onShowSidebar={() => setIsSidebarVisible(true)}
-          onNewChat={() => setActiveChatId(undefined)}
+          onNewChat={() => onSwitchChat(undefined)}
         />
         <Chat
           key={activeChatId}
           onCreateChat={onCreateChat}
           onSetChatTitle={onSetChatTitle}
-          onSwitchChat={onSwitchChat}
           activeChatId={activeChatId}
           selectedModelId={selectedModelId}
           titleGenerationModelId={titleGenerationModelId}
+          initialUserMessage={newChatUserMessage}
         />
       </div>
     </div>

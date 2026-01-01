@@ -35,8 +35,8 @@ export function Modal({
     }
   }, [isOpen]);
 
-  // Handle backdrop click
-  const handleBackdropClick = (e: React.MouseEvent) => {
+  // Handle backdrop interaction
+  const handleBackdropMouseDown = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
@@ -47,7 +47,7 @@ export function Modal({
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-      onClick={handleBackdropClick}
+      onMouseDown={handleBackdropMouseDown}
     >
       <div 
         ref={modalRef}

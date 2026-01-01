@@ -69,7 +69,6 @@ export function ChatMenuBar({ selectedModelId, onSelectedModelIdChange }: ChatMe
               ))}
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground">设为默认</span>
         </div>
         <div className="flex items-center space-x-2">
           <Button

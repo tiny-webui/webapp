@@ -9,7 +9,6 @@ import { Message } from "./message";
 
 interface ChatProps {
   onCreateChat: (chatInfo: ServerTypes.GetChatListResult[0]) => void;
-  requestChatListUpdateAsync: () => Promise<void>;
   activeChatId?: string;
   selectedModelId?: string;
   titleGenerationModelId?: string;
@@ -17,16 +16,13 @@ interface ChatProps {
 
 export function Chat({ 
   onCreateChat,
-  requestChatListUpdateAsync,
   activeChatId,
   selectedModelId,
   titleGenerationModelId
 }: ChatProps) {
-  /** @todo unused for now. */
-  void requestChatListUpdateAsync;
 
   const [generating, setGenerating] = useState(false);
-  const [loadingChat, setLoadingChat] = useState(false);
+  const [loadingChat, setLoadingChat] = useState(true);
   const [treeHistory, setTreeHistory] = useState<ServerTypes.TreeHistory>({ nodes: {} });
   const [tailNodeId, setTailNodeId] = useState<string | undefined>(undefined);
   const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.Message | undefined>(undefined);
@@ -35,39 +31,29 @@ export function Chat({
   const [previousTailNodeId, setPreviousTailNodeId] = useState<string | undefined>(undefined);
   const [messageToEdit, setMessageToEdit] = useState<ServerTypes.Message | undefined>(undefined);
   const [userDetachedFromBottom, setUserDetachedFromBottom] = useState(false);
-  const syncChatHistoryCounter = useRef(0);
   const generatingCounter = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  const syncChatHistoryAsync = useCallback(async () => {
-    if (generating) {
-      /** 
-       * Cannot read when its generating.
-       * This can happen when the title is generated but the generation is still ongoing.
-       */
-      return;
-    }
-    const originalCounter = ++syncChatHistoryCounter.current;
-    if (!activeChatId) {
-      setTreeHistory({ nodes: {} });
-      setTailNodeId(undefined);
-      setLoadingChat(false);
-      setEditingBranch(false);
-      setPreviousTailNodeId(undefined);
-      setMessageToEdit(undefined);
-      return;
-    }
-    setLoadingChat(true);
-    let callMismatch = false;
-    try {
-      const loadedTreeHistory = await TUIClientSingleton.get().getChatAsync(activeChatId);
-      if (originalCounter !== syncChatHistoryCounter.current) {
-        callMismatch = true;
+  useEffect(()=>{
+    let cancelled = false;
+
+    (async () => {
+      if (!activeChatId) {
+        setTreeHistory({ nodes: {} });
+        setTailNodeId(undefined);
+        setLoadingChat(false);
+        setEditingBranch(false);
+        setPreviousTailNodeId(undefined);
+        setMessageToEdit(undefined);
         return;
       }
-      setTreeHistory(loadedTreeHistory);
-      if ((tailNodeId === undefined || loadedTreeHistory.nodes[tailNodeId] === undefined)) {
+      try {
+        const loadedTreeHistory = await TUIClientSingleton.get().getChatAsync(activeChatId);
+        if (cancelled) {
+          return;
+        }
+        setTreeHistory(loadedTreeHistory);
         if (Object.keys(loadedTreeHistory.nodes).length === 0) {
           setTailNodeId(undefined);
         } else {
@@ -82,13 +68,17 @@ export function Chat({
           }
           setTailNodeId(latestNode.id);
         }
+      } finally {
+        if (!cancelled) {
+          setLoadingChat(false);
+        }
       }
-    } finally {
-      if (!callMismatch) {
-        setLoadingChat(false);
-      }
+    })();
+
+    return () => {
+      cancelled = true;
     }
-  }, [activeChatId, tailNodeId, generating]);
+  }, [activeChatId]);
 
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -112,12 +102,40 @@ export function Chat({
     }
   }, [pendingUserMessage, pendingAssistantMessage, generating, userDetachedFromBottom]);
 
-  useEffect(() => {
-    syncChatHistoryAsync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChatId]);
+  const generateChatTitleAndNotifyNewChatAsync = useCallback(async (chatId: string, message: ServerTypes.Message) => {
+    const modelId = titleGenerationModelId ?? selectedModelId;
+    if (modelId === undefined) {
+      throw new Error("No model selected for title generation.");
+    }
+    /** Avoid messing with the referenced message */
+    message = JSON.parse(JSON.stringify(message)) as ServerTypes.Message;
+    /** 
+     * @todo Modify the server to take a multi message parameter for this.
+     * So we can use a developer prompt instead.
+     */
+    message.content.unshift({
+      type: 'text',
+      data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
+    });
+    const title = (await TUIClientSingleton.get().executeGenerationTaskAsync({
+      modelId: modelId,
+      message: message
+    })).trim();
+    await TUIClientSingleton.get().setMetadataAsync({
+      path: ['chat', chatId],
+      entries: {
+        title: title 
+      }
+    });
+    onCreateChat({
+      id: chatId,
+      metadata: {
+        title: title
+      }
+    });
+  }, [onCreateChat, selectedModelId, titleGenerationModelId]);
 
-  async function onUserMessage(message: ServerTypes.Message) {
+  const onUserMessage = useCallback(async (message: ServerTypes.Message) => {
     if (loadingChat || generating) {
       throw new Error("Cannot send message while loading or generating.");
     }
@@ -217,42 +235,9 @@ export function Chat({
         setGenerating(false);
       }
     }
-  };
+  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, generateChatTitleAndNotifyNewChatAsync]);
 
-  async function generateChatTitleAndNotifyNewChatAsync(chatId: string, message: ServerTypes.Message) {
-    const modelId = titleGenerationModelId ?? selectedModelId;
-    if (modelId === undefined) {
-      throw new Error("No model selected for title generation.");
-    }
-    /** Avoid messing with the referenced message */
-    message = JSON.parse(JSON.stringify(message)) as ServerTypes.Message;
-    /** 
-     * @todo Modify the server to take a multi message parameter for this.
-     * So we can use a developer prompt instead.
-     */
-    message.content.unshift({
-      type: 'text',
-      data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
-    });
-    const title = (await TUIClientSingleton.get().executeGenerationTaskAsync({
-      modelId: modelId,
-      message: message
-    })).trim();
-    await TUIClientSingleton.get().setMetadataAsync({
-      path: ['chat', chatId],
-      entries: {
-        title: title 
-      }
-    });
-    onCreateChat({
-      id: chatId,
-      metadata: {
-        title: title
-      }
-    });
-  }
-
-  function getLinearHistory() : ServerTypes.MessageNode[] {
+  const getLinearHistory = useCallback(() : ServerTypes.MessageNode[] => {
     const nodes: ServerTypes.MessageNode[] = [];
     let id = tailNodeId;
     while (id !== undefined) {
@@ -264,7 +249,7 @@ export function Chat({
       id = node.parent;
     }
     return nodes;
-  }
+  }, [tailNodeId, treeHistory]);
 
   const editUserMessage = useCallback((id: string) => {
     setEditingBranch(true);

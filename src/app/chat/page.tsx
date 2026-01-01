@@ -142,7 +142,6 @@ export default function ChatPage() {
         <Chat
           key={activeChatId}
           onCreateChat={onCreateChat}
-          requestChatListUpdateAsync={updateChatListDedupAsync}
           activeChatId={activeChatId}
           selectedModelId={selectedModelId}
           titleGenerationModelId={titleGenerationModelId}

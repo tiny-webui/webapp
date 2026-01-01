@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, AlertCircle } from "lucide-react";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 
 export default function SignIn() {
@@ -13,6 +13,7 @@ export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +39,8 @@ export default function SignIn() {
       router.push("/chat");
     } catch (error) {
       console.error("Login failed: ", error);
+      setError("登录失败，请检查您的邮箱和密码是否正确。");
+      setTimeout(() => setError(null), 3000);
     } finally {
       setIsLoading(false);
     }
@@ -45,6 +48,14 @@ export default function SignIn() {
 
   return (
     <div className="w-full max-w-md space-y-8 p-4">
+      {/* 错误提示 */}
+      {error && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 rounded-md bg-destructive px-4 py-3 text-sm text-white shadow-lg">
+          <AlertCircle className="size-4" />
+          <p>{error}</p>
+        </div>
+      )}
+
       {/* 标题区域 */}
       <div className="text-center">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">

@@ -140,6 +140,7 @@ export default function ChatPage() {
           onSelectedModelIdChange={setSelectedModelId}
         />
         <Chat
+          key={activeChatId}
           onCreateChat={onCreateChat}
           requestChatListUpdateAsync={updateChatListDedupAsync}
           activeChatId={activeChatId}

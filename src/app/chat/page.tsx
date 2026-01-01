@@ -134,7 +134,7 @@ export default function ChatPage() {
         chatList={chatList}
         activeChatId={activeChatId}
       />
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <ChatMenuBar
           selectedModelId={selectedModelId}
           onSelectedModelIdChange={setSelectedModelId}

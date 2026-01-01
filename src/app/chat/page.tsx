@@ -15,6 +15,7 @@ const CHAT_LIST_MARGIN = 50;
 
 export default function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<string|undefined>(undefined);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [selectedModelId, setSelectedModelId] = useState<string|undefined>(undefined);
   const [titleGenerationModelId, setTitleGenerationModelId] = useState<string|undefined>(undefined);
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
@@ -127,17 +128,23 @@ export default function ChatPage() {
   }
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Side 
-        onSwitchChat={onSwitchChat}
-        requestChatListUpdateAsync={updateChatListDedupAsync}
-        onChatDisplayRangeChange={onChatDisplayRangeChange}
-        chatList={chatList}
-        activeChatId={activeChatId}
-      />
+      {isSidebarVisible && (
+        <Side 
+          onSwitchChat={onSwitchChat}
+          requestChatListUpdateAsync={updateChatListDedupAsync}
+          onChatDisplayRangeChange={onChatDisplayRangeChange}
+          chatList={chatList}
+          activeChatId={activeChatId}
+          onHideSidebar={() => setIsSidebarVisible(false)}
+        />
+      )}
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <ChatMenuBar
           selectedModelId={selectedModelId}
           onSelectedModelIdChange={setSelectedModelId}
+          isSidebarVisible={isSidebarVisible}
+          onShowSidebar={() => setIsSidebarVisible(true)}
+          onNewChat={() => setActiveChatId(undefined)}
         />
         <Chat
           key={activeChatId}

@@ -1,3 +1,15 @@
+# 0.1.3
+
+## What's new
+
+## Fixes
+
+* Pin libsodium version. The new version is missing files.
+
+## Changes
+
+* Remove dev pages.
+
 # 0.1.2
 
 ## What's new

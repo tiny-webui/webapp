@@ -39,6 +39,7 @@ export function Chat({
   const [previousTailNodeId, setPreviousTailNodeId] = useState<string | undefined>(undefined);
   const [messageToEdit, setMessageToEdit] = useState<ServerTypes.Message | undefined>(undefined);
   const [userDetachedFromBottom, setUserDetachedFromBottom] = useState(false);
+  const [generationError, setGenerationError] = useState<unknown | undefined>(undefined);
   const initialUserMessageHandled = useRef(false);
   const initializationCalled = useRef(false);
   const generatingCounter = useRef(0);
@@ -196,12 +197,31 @@ export function Chat({
           setPendingAssistantMessage({ ...assistantMessage });
         }
       }
+    } catch (error) {
+      if (!callMismatch) {
+        setGenerationError(error)
+      }
     } finally {
       if (!callMismatch) {
         setGenerating(false);
       }
     }
   }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, onCreateChat, requestChatListUpdateAsync]);
+
+  const cancelFailedGeneration = useCallback(() => {
+    setGenerationError(undefined);
+    setPendingUserMessage(undefined);
+    setPendingAssistantMessage(undefined);
+  }, []);
+
+  const retryFailedGenerationAsync = useCallback(async () => {
+    setGenerationError(undefined);
+    const message = pendingUserMessage;
+    if (message === undefined) {
+      throw new Error("No pending user message to retry.");
+    }
+    await onUserMessage(message);
+  }, [onUserMessage, pendingUserMessage]);
 
   useEffect(()=>{
     /** Avoid react's stupid load twice policy in debug mode which messes up the server. */
@@ -282,6 +302,19 @@ export function Chat({
     setMessageToEdit(undefined);
   }, [previousTailNodeId]);
 
+  function formatGenerationError(error: unknown): string {
+    if (error instanceof RequestError) {
+      return `${error.message} (code ${error.code})`;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === 'string') {
+      return error;
+    }
+    return `${error}`;
+  }
+
   function getNodeSiblings(tree: ServerTypes.TreeHistory, nodeId: string): ServerTypes.MessageNode[] {
     const parentId = tree.nodes[nodeId].parent;
     if (parentId === undefined) {
@@ -349,9 +382,9 @@ export function Chat({
                 key={node.id}
                 message={node.message}
                 showButtons={node.message.role === 'user'}
-                editable={!loadingChat && !generating && !editingBranch}
-                hasPrevious={messageHasPreviousSiblings(node.id) && !loadingChat && !generating && !editingBranch}
-                hasNext={messageHasNextSiblings(node.id) && !loadingChat && !generating && !editingBranch}
+                editable={!loadingChat && !generating && !editingBranch && generationError === undefined}
+                hasPrevious={messageHasPreviousSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}
+                hasNext={messageHasNextSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}
                 onEdit={() => {editUserMessage(node.id)}}
                 onPrevious={() => {gotoPreviousSibling(node.id)}}
                 onNext={() => {gotoNextSibling(node.id)}}
@@ -390,13 +423,45 @@ export function Chat({
               </div>
             </div>
           )}
+          {(generationError !== undefined) && (
+            <div
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm"
+              role="alert"
+              aria-label="Generation error"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-destructive">生成失败</div>
+                  <div className="mt-1 whitespace-pre-wrap break-words text-foreground/80">
+                    {formatGenerationError(generationError)}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={cancelFailedGeneration}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => { void retryFailedGenerationAsync(); }}
+                    disabled={pendingUserMessage === undefined}
+                  >
+                    重试
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       { /** User input area */ }
       <UserInput
         onUserMessage={onUserMessage}
-        inputEnabled={!loadingChat && !generating}
+        inputEnabled={!loadingChat && !generating && generationError === undefined}
         initialMessage={editingBranch ? messageToEdit : undefined}
       />
     </div>

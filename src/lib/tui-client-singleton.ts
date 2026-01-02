@@ -4,7 +4,10 @@ export class TUIClientSingleton {
     static #instance: TUIClient | undefined = undefined;
     static get(): TUIClient {
         if (!this.#instance) {
-            throw new Error("TUIClient instance is not created.")
+            if (typeof window !== undefined && window.location.pathname !== '/auth/sign-in') {
+                window.location.replace('/auth/sign-in');
+            }
+            throw new Error("TUIClient instance does not exist.");
         }
         return this.#instance;
     }

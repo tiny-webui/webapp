@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Chat } from "./chat";
 import { ChatMenuBar } from "./menu-bar";
 import { Side } from "./side";
@@ -15,31 +15,53 @@ const CHAT_LIST_MARGIN = 50;
 
 export default function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<string|undefined>(undefined);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [selectedModelId, setSelectedModelId] = useState<string|undefined>(undefined);
   const [titleGenerationModelId, setTitleGenerationModelId] = useState<string|undefined>(undefined);
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
   const [initialized, setInitialized] = useState(false);
+  const [newChatUserMessage, setNewChatUserMessage] = useState<ServerTypes.Message|undefined>(undefined);
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
   const updateChatListPromise = useRef<Promise<void>|undefined>(undefined);
 
-  function onSwitchChat(chatId: string | undefined) {
+  const onSwitchChat = useCallback((chatId: string | undefined) => {
     setActiveChatId(chatId);
-  }
+    setNewChatUserMessage(undefined);
+  }, []);
 
   function onChatDisplayRangeChange(max: number) {
     maxDisplayedChatIndex.current = max;
   }
 
-  function onCreateChat(chatInfo: ServerTypes.GetChatListResult[0]) {
-    setChatList([chatInfo, ...chatList]);
-    if (activeChatId === undefined) {
-      /** Focus on the newly created chat if we are not on another chat already. */
-      setActiveChatId(chatInfo.id);
-    }
-  }
+  const onCreateChat = useCallback((chatId: string, message: ServerTypes.Message) => {
+    const chatInfo = {
+      id: chatId
+    };
+    setChatList(prev => [chatInfo, ...prev]);
+    setActiveChatId(chatId);
+    setNewChatUserMessage(message);
+  }, []);
 
-  async function updateChatListAsync(fromStart?: boolean) {
+  const onSetChatTitle = useCallback((chatId: string, title: string) => {
+    setChatList(prevList => {
+      return prevList.map(chat => {
+        if (chat.id === chatId) {
+          return {
+            ...chat,
+            metadata: {
+              ...chat.metadata,
+              title: title,
+            },
+          };
+        } else {
+          return chat;
+        }
+      });
+    });
+  }, []);
+
+  const updateChatListAsync = useCallback(async (fromStart?: boolean) => {
     /** Allow two trials in case of resource conflict */
     for (let trial = 0; trial < 2; trial++) {
       try {
@@ -54,7 +76,7 @@ export default function ChatPage() {
         setChatList(newList);
         if (newList.find(c => c.id === activeChatId) === undefined) {
           /** The active chat was deleted */
-          setActiveChatId(undefined);
+          onSwitchChat(undefined);
         }
         return;
       } catch (error) {
@@ -66,15 +88,15 @@ export default function ChatPage() {
         }
       }
     }
-  }
+  }, [chatList, activeChatId, onSwitchChat]);
 
-  async function updateChatListDedupAsync() {
+  const updateChatListDedupAsync = useCallback(async () => {
     if (updateChatListPromise.current === undefined) {
       updateChatListPromise.current = updateChatListAsync();
     }
     await updateChatListPromise.current;
     updateChatListPromise.current = undefined;
-  }
+  }, [updateChatListAsync]);
 
   useEffect(() => {
     let canceled = false;
@@ -127,24 +149,33 @@ export default function ChatPage() {
   }
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Side 
-        onSwitchChat={onSwitchChat}
-        requestChatListUpdateAsync={updateChatListDedupAsync}
-        onChatDisplayRangeChange={onChatDisplayRangeChange}
-        chatList={chatList}
-        activeChatId={activeChatId}
-      />
-      <div className="flex-1 flex flex-col min-h-0">
+      {isSidebarVisible && (
+        <Side 
+          onSwitchChat={onSwitchChat}
+          requestChatListUpdateAsync={updateChatListDedupAsync}
+          onChatDisplayRangeChange={onChatDisplayRangeChange}
+          chatList={chatList}
+          activeChatId={activeChatId}
+          onHideSidebar={() => setIsSidebarVisible(false)}
+        />
+      )}
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <ChatMenuBar
           selectedModelId={selectedModelId}
           onSelectedModelIdChange={setSelectedModelId}
+          isSidebarVisible={isSidebarVisible}
+          onShowSidebar={() => setIsSidebarVisible(true)}
+          onNewChat={() => onSwitchChat(undefined)}
         />
         <Chat
+          key={activeChatId}
           onCreateChat={onCreateChat}
+          onSetChatTitle={onSetChatTitle}
           requestChatListUpdateAsync={updateChatListDedupAsync}
           activeChatId={activeChatId}
           selectedModelId={selectedModelId}
           titleGenerationModelId={titleGenerationModelId}
+          initialUserMessage={newChatUserMessage}
         />
       </div>
     </div>

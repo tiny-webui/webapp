@@ -46,6 +46,7 @@ export function AzureOpenAIForm({ initialName, initialSettings, onSubmit }: Prov
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           required
+          autoComplete='off'
         />
       </div>
       <div className="flex flex-col gap-2">

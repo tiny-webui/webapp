@@ -10,16 +10,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, PanelLeftOpen, SquarePen } from "lucide-react";
 import * as ServerTypes from "@/sdk/types/IServer";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 
 interface ChatMenuBarProps {
   selectedModelId?: string;
   onSelectedModelIdChange: (id: string) => void;
+  isSidebarVisible: boolean;
+  onShowSidebar: () => void;
+  onNewChat: () => void;
 }
 
-export function ChatMenuBar({ selectedModelId, onSelectedModelIdChange }: ChatMenuBarProps) {
+export function ChatMenuBar({ 
+  selectedModelId, 
+  onSelectedModelIdChange,
+  isSidebarVisible,
+  onShowSidebar,
+  onNewChat
+}: ChatMenuBarProps) {
   const [modelList, setModelList] = useState<ServerTypes.GetModelListResult>([]);
   const router = useRouter();
 
@@ -49,6 +58,16 @@ export function ChatMenuBar({ selectedModelId, onSelectedModelIdChange }: ChatMe
     <div className="border-b border-border p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
+          {!isSidebarVisible && (
+            <>
+              <Button variant="ghost" size="icon" onClick={onShowSidebar}>
+                <PanelLeftOpen className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={onNewChat}>
+                <SquarePen className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           <Select
             value={selectedModelId}
             onValueChange={onSelectedModelIdChange}
@@ -69,7 +88,6 @@ export function ChatMenuBar({ selectedModelId, onSelectedModelIdChange }: ChatMe
               ))}
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground">设为默认</span>
         </div>
         <div className="flex items-center space-x-2">
           <Button

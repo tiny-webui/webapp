@@ -4,6 +4,8 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { Logo } from "@/components/custom/logo";
 import * as ServerTypes from "@/sdk/types/IServer";
 import { ChatTitle } from "./chat-title";
+import { PanelLeftClose } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface SideProps {
   /** Switch to a chat id. Pass undefined for the temporary new chat */
@@ -14,6 +16,7 @@ interface SideProps {
   onChatDisplayRangeChange: (max: number) => void;
   chatList: ServerTypes.GetChatListResult;
   activeChatId: string | undefined;
+  onHideSidebar: () => void;
 }
 
 /** Distance in px from bottom to trigger loading more */
@@ -27,6 +30,7 @@ export function Side({
   onChatDisplayRangeChange,
   chatList,
   activeChatId,
+  onHideSidebar,
 }: SideProps) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const chatItemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -136,6 +140,9 @@ export function Side({
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <Logo size="md" />
+          <Button variant="ghost" size="icon" onClick={onHideSidebar}>
+            <PanelLeftClose className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 

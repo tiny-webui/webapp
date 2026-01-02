@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
-    "build:static": "node scripts/exclude-dev-routes.mjs && next build && node scripts/restore-dev-routes.mjs",
     "lint": "next lint",
     "test": "node --experimental-vm-modules node_modules/.bin/jest"
   },

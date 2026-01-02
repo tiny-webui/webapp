@@ -6,10 +6,13 @@ import * as ServerTypes from "@/sdk/types/IServer";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import { UserInput } from "./user-input";
 import { Message } from "./message";
+import { RequestError } from "@/sdk/app/rpc";
+import { ErrorCode } from "@/sdk/types/Rpc";
 
 interface ChatProps {
   onCreateChat: (chatId: string, message: ServerTypes.Message) => void;
   onSetChatTitle: (chatId: string, title: string) => void;
+  requestChatListUpdateAsync?: () => Promise<void>;
   activeChatId?: string;
   selectedModelId?: string;
   titleGenerationModelId?: string;
@@ -19,6 +22,7 @@ interface ChatProps {
 export function Chat({ 
   onCreateChat,
   onSetChatTitle,
+  requestChatListUpdateAsync,
   activeChatId,
   selectedModelId,
   titleGenerationModelId,
@@ -111,8 +115,16 @@ export function Chat({
     try {
       let chatId = activeChatId;
       if (chatId === undefined) {
-        /** @todo This may throw CONFLICT. If so, we need to request a chat list update and retry. */
-        chatId = await TUIClientSingleton.get().newChatAsync();
+        try {
+          /** This may throw CONFLICT. If so, we need to request a chat list update and retry. */
+          chatId = await TUIClientSingleton.get().newChatAsync();
+        } catch (error) {
+          if (!(error instanceof RequestError) || error.code !== ErrorCode.CONFLICT) {
+            throw error;
+          }
+          await requestChatListUpdateAsync?.();
+          chatId = await TUIClientSingleton.get().newChatAsync();
+        }
         onCreateChat(chatId, message);
         return;
       }
@@ -189,7 +201,7 @@ export function Chat({
         setGenerating(false);
       }
     }
-  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, onCreateChat]);
+  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, onCreateChat, requestChatListUpdateAsync]);
 
   useEffect(()=>{
     /** Avoid react's stupid load twice policy in debug mode which messes up the server. */
@@ -197,8 +209,6 @@ export function Chat({
       return;
     }
     initializationCalled.current = true;
-
-    console.log("Loading chat history for chat id:", activeChatId);
     (async () => {
       if (!activeChatId) {
         /** No chat */
@@ -211,9 +221,6 @@ export function Chat({
         return;
       }
       if (initialUserMessage && !initialUserMessageHandled.current) {
-        
-        console.log("Handling initial user message for new chat:", activeChatId, initialUserMessage);
-
         /** New chat */
         initialUserMessageHandled.current = true;
         onUserMessage(initialUserMessage);

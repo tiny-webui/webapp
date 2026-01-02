@@ -38,10 +38,10 @@ export default function ChatPage() {
     const chatInfo = {
       id: chatId
     };
-    setChatList([chatInfo, ...chatList]);
+    setChatList(prev => [chatInfo, ...prev]);
     setActiveChatId(chatId);
     setNewChatUserMessage(message);
-  }, [chatList]);
+  }, []);
 
   const onSetChatTitle = useCallback((chatId: string, title: string) => {
     setChatList(prevList => {
@@ -61,7 +61,7 @@ export default function ChatPage() {
     });
   }, []);
 
-  async function updateChatListAsync(fromStart?: boolean) {
+  const updateChatListAsync = useCallback(async (fromStart?: boolean) => {
     /** Allow two trials in case of resource conflict */
     for (let trial = 0; trial < 2; trial++) {
       try {
@@ -88,15 +88,15 @@ export default function ChatPage() {
         }
       }
     }
-  }
+  }, [chatList, activeChatId, onSwitchChat]);
 
-  async function updateChatListDedupAsync() {
+  const updateChatListDedupAsync = useCallback(async () => {
     if (updateChatListPromise.current === undefined) {
       updateChatListPromise.current = updateChatListAsync();
     }
     await updateChatListPromise.current;
     updateChatListPromise.current = undefined;
-  }
+  }, [updateChatListAsync]);
 
   useEffect(() => {
     let canceled = false;
@@ -171,6 +171,7 @@ export default function ChatPage() {
           key={activeChatId}
           onCreateChat={onCreateChat}
           onSetChatTitle={onSetChatTitle}
+          requestChatListUpdateAsync={updateChatListDedupAsync}
           activeChatId={activeChatId}
           selectedModelId={selectedModelId}
           titleGenerationModelId={titleGenerationModelId}

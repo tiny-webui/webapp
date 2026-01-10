@@ -43,6 +43,15 @@ export default function ChatPage() {
     setNewChatUserMessage(message);
   }, []);
 
+  const onDeleteChat = useCallback((chatId: string) => {
+    setChatList(prevList => {
+      return prevList.filter(chat => chat.id !== chatId);
+    });
+    if (activeChatId === chatId) {
+      setActiveChatId(undefined);
+    }
+  }, [activeChatId]);
+
   const onSetChatTitle = useCallback((chatId: string, title: string) => {
     setChatList(prevList => {
       return prevList.map(chat => {
@@ -154,6 +163,8 @@ export default function ChatPage() {
           onSwitchChat={onSwitchChat}
           requestChatListUpdateAsync={updateChatListDedupAsync}
           onChatDisplayRangeChange={onChatDisplayRangeChange}
+          onSetChatTitle={onSetChatTitle}
+          onDeleteChat={onDeleteChat}
           chatList={chatList}
           activeChatId={activeChatId}
           onHideSidebar={() => setIsSidebarVisible(false)}

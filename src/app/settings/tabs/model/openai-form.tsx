@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ProviderFormProps } from './provider-form-props';
 import { tryGetProperty } from '@/lib/obj-helper';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select } from '@/components/ui/select';
 
 const validReasoningEfforts = new Set(['none', 'low', 'medium', 'high']);
 
@@ -20,6 +20,13 @@ export function OpenAIForm({ initialName, initialSettings, onSubmit }: ProviderF
   const [reasoningEffort, setReasoningEffort] = useState<string>(
     validReasoningEfforts.has(initialReasoningEffort ?? '') ? (initialReasoningEffort ?? '') : ''
   );
+
+  const reasoningOptions = new Map([
+    ["none", "none"],
+    ["low", "low"],
+    ["medium", "medium"],
+    ["high", "high"],
+  ]);
 
   const canSubmit = name.trim() && apiKey.trim() && model.trim();
 
@@ -85,26 +92,16 @@ export function OpenAIForm({ initialName, initialSettings, onSubmit }: ProviderF
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium" htmlFor="openai-model-reasoning">Reasoning Effort</label>
         <Select
+          id="openai-model-reasoning"
+          candidates={reasoningOptions}
           value={reasoningEffort}
           onValueChange={(value) => {
             setReasoningEffort(value);
           }}
-        >
-          <SelectTrigger
-            id="openai-model-reasoning"
-            className="w-full"
-            hasValue={reasoningEffort !== ''}
-            onClear={()=>{setReasoningEffort('')}}
-          >
-            <SelectValue placeholder="[可选] reasoning effort" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">none</SelectItem>
-            <SelectItem value="low">low</SelectItem>
-            <SelectItem value="medium">medium</SelectItem>
-            <SelectItem value="high">high</SelectItem>
-          </SelectContent>
-        </Select>
+          placeholder="[可选] reasoning effort"
+          allowClear
+          className="w-full"
+        />
       </div>
       <div className="flex items-center justify-between gap-2 pt-2">
         <div className="flex items-center gap-2">

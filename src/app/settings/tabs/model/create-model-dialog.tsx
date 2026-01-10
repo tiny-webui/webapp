@@ -5,6 +5,7 @@ import { ProviderKey, getProviderDisplayName, getProviderIcon, AVAILABLE_PROVIDE
 import Image from 'next/image';
 import { Modal } from '@/components/ui/modal';
 import { AzureOpenAIForm } from './azure-openai-form';
+import { OpenAIForm } from './openai-form';
 import { TUIClientSingleton } from '@/lib/tui-client-singleton';
 
 export interface CreateModelDialogProps {
@@ -75,6 +76,11 @@ export const CreateModelDialog = ({ onComplete }: CreateModelDialogProps) => {
       )}
       {selectedProvider === 'AzureOpenAI' && (!saving) && (
         <AzureOpenAIForm
+          onSubmit={createModelAsync}
+        />
+      )}
+      {selectedProvider === 'OpenAI' && (!saving) && (
+        <OpenAIForm
           onSubmit={createModelAsync}
         />
       )}

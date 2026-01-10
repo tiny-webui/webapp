@@ -1,3 +1,17 @@
+# 0.1.4
+
+## What's new
+
+* Add OpenAI provider
+* Add privacy policy
+* Add rename and delete chat context menu
+
+## Fixes
+
+## Changes
+
+* Slightly adjust layout
+
 # 0.1.3
 
 ## What's new

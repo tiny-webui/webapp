@@ -82,21 +82,21 @@ export default function SettingsPage() {
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar styled like chat side */}
-      <aside className="w-80 bg-sidebar border-r border-border flex flex-col">
+      <aside className="w-80 bg-sidebar border-r border-border flex flex-col space-y-1">
         {/* Logo area (same spacing as chat) */}
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-4">
+        <div className="px-4">
+          <div className="flex items-center justify-between h-16">
             <Logo size="md" />
           </div>
         </div>
         {/* Scrollable category list */}
         <div className="flex-1 overflow-y-auto">
-          <div className="p-4 pt-0 space-y-6">
+          <div className="p-2 pt-0 space-y-6">
             {structure
               .filter(group => group.id !== 'admin' || isAdmin)
               .map(group => (
               <div key={group.id}>
-                <div className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</div>
+                <div className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</div>
                 <ul className="space-y-1">
                   {group.children.map(child => {
                     const active = child.id === currentTab;
@@ -126,7 +126,7 @@ export default function SettingsPage() {
       {/* Right side */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Top menu bar */}
-        <div className="border-b border-border px-4 h-14 flex items-center justify-between relative">
+        <div className="border-b border-border px-4 h-16 flex items-center justify-between relative">
           <div className="font-medium text-sm">{currentLabel}</div>
           <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose} aria-label="关闭设置">
             <X className="size-4" />

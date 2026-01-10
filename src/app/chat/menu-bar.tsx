@@ -55,8 +55,8 @@ export function ChatMenuBar({
   }, []);
 
   return (
-    <div className="border-b border-border p-4">
-      <div className="flex items-center justify-between">
+    <div className="border-b border-border px-4">
+      <div className="flex items-center justify-between h-16">
         <div className="flex items-center space-x-2">
           {!isSidebarVisible && (
             <>

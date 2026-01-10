@@ -135,10 +135,10 @@ export function Side({
   }, []);
 
   return (
-    <div className="w-80 bg-sidebar border-r border-border flex flex-col">
+    <div className="w-80 bg-sidebar border-r border-border flex flex-col space-y-1">
       {/* Logo and settings button */}
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="px-4">
+        <div className="flex items-center justify-between h-16">
           <Logo size="md" />
           <Button variant="ghost" size="icon" onClick={onHideSidebar}>
             <PanelLeftClose className="h-4 w-4" />
@@ -152,7 +152,7 @@ export function Side({
         onScroll={onScroll}
         className="flex-1 overflow-y-auto"
       >
-        <div className="p-4 pt-0">
+        <div className="p-2 pt-0">
           <div className="space-y-1">
             <ChatTitle
               key="temp-chat"
@@ -175,7 +175,7 @@ export function Side({
               />
             })}
             {isLoading && (
-              <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground select-none">
+              <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground select-none">
                 <span className="inline-block size-3 rounded-full border-2 border-primary border-t-transparent animate-spin" aria-label="loading" />
                 <span>加载中…</span>
               </div>

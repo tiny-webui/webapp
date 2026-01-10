@@ -56,6 +56,7 @@ export default function SignUp() {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -236,13 +237,13 @@ export default function SignUp() {
           />
           <label htmlFor="terms" className="text-sm text-muted-foreground">
             我已阅读并同意{" "}
-            <a href="#" className="text-primary hover:underline">
-              服务条款
-            </a>{" "}
-            和{" "}
-            <a href="#" className="text-primary hover:underline">
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => setShowPrivacyModal(true)}
+            >
               隐私政策
-            </a>
+            </button>
           </label>
         </div>
 
@@ -280,6 +281,41 @@ export default function SignUp() {
           </a>
         </p>
       </div>
+
+      {/* Privacy policy modal */}
+      <Modal
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+        title="隐私政策"
+      >
+        <div className="max-h-96 overflow-y-auto space-y-3 pr-1 text-sm text-foreground leading-relaxed">
+          <p className="font-semibold">Tiny WebUI</p>
+          <p>
+            Tiny WebUI 仅会收集以下用户数据
+            <li>1. 镜像源下载量</li>
+          </p>
+          <p className="font-semibold">设备管理员</p>
+          <p>
+            您的数据储存在部署服务端的设备上，且可被设备管理员访问
+            <li>1. 模型配置信息</li>
+            <li>2. 用户账户信息</li>
+            <li>3. 对话信息</li>
+            <li>4. 设置信息</li>
+          </p>
+          <p>
+            您的密码受SPAKE2+保护，因此设备管理员无法直接读取明文，但可能通过暴力破解尝试获取明文
+          </p>
+          <p className="font-semibold">管理员用户</p>
+          <p>
+            管理员用户可访问以下数据
+            <li>1. 用户名/邮箱</li>
+          </p>
+          <p className="font-semibold">模型供应商</p>
+          <p>
+            模型供应商可能会收集您的使用数据，具体请参阅相应模型供应商的隐私政策，Tiny WebUI不会对模型供应商收集的数据负责
+          </p>
+        </div>
+      </Modal>
 
       {/* Success Modal */}
       <Modal

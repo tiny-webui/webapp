@@ -1,13 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Select } from "@/components/ui/select";
 
 export interface DropDownOptionProps<TItem> {
   label: string;
@@ -17,7 +11,6 @@ export interface DropDownOptionProps<TItem> {
   saveValueAsync: (value: string) => Promise<void>;
   getItemCaption: (item: TItem) => string;
   getItemValue: (item: TItem) => string;
-  getItemKey: (item: TItem) => string;
 };
 
 export function DropDownOption<TItem>({
@@ -28,11 +21,14 @@ export function DropDownOption<TItem>({
   saveValueAsync,
   getItemCaption,
   getItemValue,
-  getItemKey,
 }: DropDownOptionProps<TItem>) {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [itemList, setItemList] = useState<TItem[]>([]);
+
+  const candidates = useMemo(() => {
+    return new Map(itemList.map(item => [getItemCaption(item), getItemValue(item)]));
+  }, [itemList, getItemCaption, getItemValue]);
 
   const updateItemListAsync = useCallback(async () => {
     try {
@@ -76,22 +72,14 @@ export function DropDownOption<TItem>({
       <span className="text-sm font-medium select-none">{label}</span>
       <div className="ml-auto flex items-center gap-2">
         <Select
-          value={value}
+          candidates={candidates}
+          value={value ?? ""}
           onValueChange={onValueChangeAsync}
-          onOpenChange={(open) => { if (open) updateItemListAsync(); }}
+          onOpen={() => { updateItemListAsync(); }}
           disabled={!loaded || saving}
-        >
-          <SelectTrigger className="w-64">
-            <SelectValue placeholder={loaded ? (placeholder ?? '') : "加载中..."} />
-          </SelectTrigger>
-          <SelectContent>
-            {itemList.map(item => (
-              <SelectItem key={getItemKey(item)} value={getItemValue(item)}>
-                {getItemCaption(item)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder={loaded ? (placeholder ?? "") : "加载中..."}
+          className="w-64"
+        />
       </div>
     </div>
   );

@@ -1,14 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Settings, PanelLeftOpen, SquarePen } from "lucide-react";
 import * as ServerTypes from "@/sdk/types/IServer";
@@ -32,13 +26,13 @@ export function ChatMenuBar({
   const [modelList, setModelList] = useState<ServerTypes.GetModelListResult>([]);
   const router = useRouter();
 
-  function getModelName(model: ServerTypes.GetModelListResult[number]): string {
+  const getModelName = useCallback((model: ServerTypes.GetModelListResult[number]): string => {
     const modelName = model.metadata?.name;
-    if (!(typeof modelName === 'string')) {
+    if (!(typeof modelName === "string")) {
       return "未命名模型";
     }
     return modelName;
-  }
+  }, []);
 
   const updateModelListAsync = useCallback(async () => {
     const models = await TUIClientSingleton.get().getModelListAsync({ metadataKeys: ['name'] });
@@ -53,6 +47,12 @@ export function ChatMenuBar({
     // This should NOT be called when selectedModelId changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const candidates = useMemo(() => {
+    return new Map(
+      modelList.map(model => [getModelName(model), model.id])
+    );
+  }, [getModelName, modelList]);
 
   return (
     <div className="border-b border-border px-4">
@@ -69,25 +69,15 @@ export function ChatMenuBar({
             </>
           )}
           <Select
-            value={selectedModelId}
+            candidates={candidates}
+            value={selectedModelId ?? ""}
             onValueChange={onSelectedModelIdChange}
-            onOpenChange={(open) => {
-              if (open) {
-                updateModelListAsync().catch(console.error);
-              }
+            onOpen={() => {
+              updateModelListAsync().catch(console.error);
             }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {modelList.map(model => (
-                <SelectItem key={model.id} value={model.id}>
-                  {getModelName(model)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            placeholder="选择模型"
+            className="w-[180px]"
+          />
         </div>
         <div className="flex items-center space-x-2">
           <Button

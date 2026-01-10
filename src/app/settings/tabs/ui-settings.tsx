@@ -40,7 +40,6 @@ export function UiSettings() {
         saveValueAsync={async (value) => setTheme(value)}
         getItemCaption={(item) => item.name}
         getItemValue={(item) => item.id}
-        getItemKey={(item) => item.id}
       />
     </div>
   );

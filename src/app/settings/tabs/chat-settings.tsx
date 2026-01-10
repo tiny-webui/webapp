@@ -57,7 +57,6 @@ export function ChatSettings() {
         return modelName;
       }}
       getItemValue={(item) => item.id}
-      getItemKey={(item) => item.id}
     />
   );
 }

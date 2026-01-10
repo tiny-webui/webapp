@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/modal';
 import { AzureOpenAIForm } from './azure-openai-form';
 import { TUIClientSingleton } from '@/lib/tui-client-singleton';
 import { objectsAreEqual } from '@/lib/obj-helper';
+import { OpenAIForm } from './openai-form';
 
 export interface ModifyModelDialogProps {
   modelId: string;
@@ -84,6 +85,13 @@ export const ModifyModelDialog = ({ modelId, onComplete }: ModifyModelDialogProp
     >
       {providerName === 'AzureOpenAI' && (!saving) && loaded && (
         <AzureOpenAIForm
+          initialName={modelName}
+          initialSettings={providerParams}
+          onSubmit={modifyModelAsync}
+        />
+      )}
+      {providerName === 'OpenAI' && (!saving) && loaded && (
+        <OpenAIForm
           initialName={modelName}
           initialSettings={providerParams}
           onSubmit={modifyModelAsync}

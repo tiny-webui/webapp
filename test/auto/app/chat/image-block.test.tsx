@@ -38,4 +38,21 @@ describe('ImageBlock component', () => {
     fireEvent.click(dialog);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
+
+  test('esc key closes preview', () => {
+    render(<ImageBlock src="/next.svg" alt="Next Logo" />);
+    fireEvent.click(screen.getByRole('button', { name: /open image: next logo/i }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  test('removable thumbnail triggers onRemove without opening preview', () => {
+    const removeSpy = jest.fn();
+    render(<ImageBlock src="/next.svg" alt="Next Logo" removable onRemove={removeSpy} />);
+    const removeButton = screen.getByRole('button', { name: '移除图片' });
+    fireEvent.click(removeButton);
+    expect(removeSpy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
 });

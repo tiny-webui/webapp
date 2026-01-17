@@ -43,6 +43,7 @@ export function Chat({
   const initialUserMessageHandled = useRef(false);
   const initializationCalled = useRef(false);
   const generatingCounter = useRef(0);
+  const initialGenerationScrollDone = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -52,21 +53,26 @@ export function Chat({
       return;
     }
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    setUserDetachedFromBottom(distanceFromBottom > 30);
+    setUserDetachedFromBottom(distanceFromBottom > 20);
   }, []);
 
   useEffect(() => {
     if (!generating || !bottomRef.current) {
       return;
     }
-    if (pendingAssistantMessage?.content.length === 1 && pendingAssistantMessage.content[0].data === '') {
-      /** The user just input text. Jump to the bottom */
+    const isInitialAssistantMessage = pendingAssistantMessage?.content.length === 1 && pendingAssistantMessage.content[0].data === '';
+    if (!initialGenerationScrollDone.current && pendingAssistantMessage) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    } else if (!userDetachedFromBottom) {
-      /** Generating and the user does not leave the bottom */
+      initialGenerationScrollDone.current = true;
+      return;
+    }
+    if (userDetachedFromBottom) {
+      return;
+    }
+    if (isInitialAssistantMessage || pendingAssistantMessage) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [pendingUserMessage, pendingAssistantMessage, generating, userDetachedFromBottom]);
+  }, [pendingAssistantMessage, generating, userDetachedFromBottom]);
 
   const generateChatTitleAsync = useCallback(async (chatId: string, message: ServerTypes.Message) => {
     const modelId = titleGenerationModelId ?? selectedModelId;
@@ -139,6 +145,7 @@ export function Chat({
         ]
       };
       const userMessageTimestamp = Date.now();
+      initialGenerationScrollDone.current = false;
       setPendingAssistantMessage(assistantMessage);
       /** 
        * This step should start even on mismatch to ensure a concise chat history

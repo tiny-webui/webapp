@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState, MouseEvent } from "react";
+import { useEffect, useRef, useCallback, useState, MouseEvent, useLayoutEffect } from "react";
 import { PanelLeftClose } from "lucide-react";
 import { Logo } from "@/components/custom/logo";
 import { Button } from "@/components/ui/button";
@@ -71,6 +71,7 @@ export function Side({
   const [renameSubmitting, setRenameSubmitting] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const triggerUpdate = useCallback(async () => {
     if (isLoading) return; // avoid parallel loads
@@ -203,6 +204,21 @@ export function Side({
     setActionError(undefined);
   }, []);
 
+  /** Ensure the context menu stays within the viewport bounds */
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const rect = contextMenuRef.current.getBoundingClientRect();
+    const padding = 8; // small offset to avoid sticking to the edges
+    const maxX = Math.max(padding, window.innerWidth - rect.width - padding);
+    const maxY = Math.max(padding, window.innerHeight - rect.height - padding);
+    const clampedX = Math.max(padding, Math.min(contextMenu.x, maxX));
+    const clampedY = Math.max(padding, Math.min(contextMenu.y, maxY));
+
+    if (clampedX !== contextMenu.x || clampedY !== contextMenu.y) {
+      setContextMenu(prev => (prev ? { ...prev, x: clampedX, y: clampedY } : prev));
+    }
+  }, [contextMenu]);
+
   const confirmRenameAsync = useCallback(async () => {
     if (!renameDialog.chatId) {
       return;
@@ -324,6 +340,7 @@ export function Side({
         >
           <div
             className="absolute min-w-[170px] overflow-hidden rounded-md border border-border bg-background text-sm shadow-lg"
+            ref={contextMenuRef}
             style={{ top: contextMenu.y, left: contextMenu.x }}
             onClick={event => event.stopPropagation()}
           >

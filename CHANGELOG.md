@@ -7,6 +7,7 @@
 ## Fixes
 
 * Fix context menu out of view issue
+* Fix cannot scroll when waiting for first generation issue
 
 ## Changes
 

@@ -1,3 +1,15 @@
+# 0.1.5
+
+## What's new
+
+* Add copy button for code blocks
+
+## Fixes
+
+* Fix context menu out of view issue
+
+## Changes
+
 # 0.1.4
 
 ## What's new

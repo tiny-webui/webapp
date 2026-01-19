@@ -44,16 +44,22 @@ function extractText(node: React.ReactNode): string {
     .join("");
 }
 
-function CodeBlock({
-  inline,
+function ensureLanguageClass(className?: string) {
+  if (!className) {
+    return "language-plaintext";
+  }
+  return className.split(" ").some((cls) => cls.startsWith("language-"))
+    ? className
+    : `${className} language-plaintext`;
+}
+
+function CodeBlockPre({
   className,
   children,
   ...props
-}: DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & { inline?: boolean }) {
+}: DetailedHTMLProps<HTMLAttributes<HTMLPreElement>, HTMLPreElement>) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInline = inline || !className || !className.includes("language-");
-  const rest = props;
   const codeText = useMemo(() => extractText(children).replace(/\n$/, ""), [children]);
 
   useEffect(() => {
@@ -63,14 +69,6 @@ function CodeBlock({
       }
     };
   }, []);
-
-  if (isInline) {
-    return (
-      <code className={className} {...rest}>
-        {children}
-      </code>
-    );
-  }
 
   const handleCopy = async () => {
     try {
@@ -85,8 +83,20 @@ function CodeBlock({
     }
   };
 
+  const preClassName = ensureLanguageClass(className);
+  const mappedChildren = React.Children.map(children, (child) => {
+    if (!React.isValidElement<{ className?: string }>(child)) {
+      return child;
+    }
+    const typedChild = child as React.ReactElement<{ className?: string }>;
+    return React.cloneElement(typedChild, {
+      className: ensureLanguageClass(typedChild.props.className),
+    });
+  });
+  const normalizedChildren = mappedChildren ?? children;
+
   return (
-    <div className="relative group">
+    <div className="relative group border-0">
       <button
         type="button"
         aria-label={copied ? "Copied" : "Copy code"}
@@ -100,8 +110,8 @@ function CodeBlock({
         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
         <span className="sr-only">{copied ? "Copied" : "Copy code"}</span>
       </button>
-      <pre className={className}>
-        <code className={className} {...rest}>{children}</code>
+      <pre {...props} className={preClassName}>
+        {normalizedChildren}
       </pre>
     </div>
   );
@@ -119,7 +129,7 @@ export default function MarkdownRenderer({ content }: { content: string }) {
         components={{
           ul: (props) => <ul className="list-disc" {...props} />,
           ol: (props) => <ol className="list-decimal" {...props} />,
-          code: CodeBlock,
+          pre: CodeBlockPre,
         }}
       >
         {NormalizeMathTags(content)}

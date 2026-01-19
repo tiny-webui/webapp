@@ -44,7 +44,17 @@ function extractText(node: React.ReactNode): string {
     .join("");
 }
 
+function ensureLanguageClass(className?: string) {
+  if (!className) {
+    return "language-plaintext";
+  }
+  return className.split(" ").some((cls) => cls.startsWith("language-"))
+    ? className
+    : `${className} language-plaintext`;
+}
+
 function CodeBlockPre({
+  className,
   children,
   ...props
 }: DetailedHTMLProps<HTMLAttributes<HTMLPreElement>, HTMLPreElement>) {
@@ -73,6 +83,18 @@ function CodeBlockPre({
     }
   };
 
+  const preClassName = ensureLanguageClass(className);
+  const mappedChildren = React.Children.map(children, (child) => {
+    if (!React.isValidElement<{ className?: string }>(child)) {
+      return child;
+    }
+    const typedChild = child as React.ReactElement<{ className?: string }>;
+    return React.cloneElement(typedChild, {
+      className: ensureLanguageClass(typedChild.props.className),
+    });
+  });
+  const normalizedChildren = mappedChildren ?? children;
+
   return (
     <div className="relative group border-0">
       <button
@@ -88,7 +110,9 @@ function CodeBlockPre({
         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
         <span className="sr-only">{copied ? "Copied" : "Copy code"}</span>
       </button>
-      <pre {...props}>{children}</pre>
+      <pre {...props} className={preClassName}>
+        {normalizedChildren}
+      </pre>
     </div>
   );
 }

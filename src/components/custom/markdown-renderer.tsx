@@ -44,16 +44,12 @@ function extractText(node: React.ReactNode): string {
     .join("");
 }
 
-function CodeBlock({
-  inline,
-  className,
+function CodeBlockPre({
   children,
   ...props
-}: DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & { inline?: boolean }) {
+}: DetailedHTMLProps<HTMLAttributes<HTMLPreElement>, HTMLPreElement>) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInline = inline || !className || !className.includes("language-");
-  const rest = props;
   const codeText = useMemo(() => extractText(children).replace(/\n$/, ""), [children]);
 
   useEffect(() => {
@@ -63,14 +59,6 @@ function CodeBlock({
       }
     };
   }, []);
-
-  if (isInline) {
-    return (
-      <code className={className} {...rest}>
-        {children}
-      </code>
-    );
-  }
 
   const handleCopy = async () => {
     try {
@@ -86,7 +74,7 @@ function CodeBlock({
   };
 
   return (
-    <div className="relative group">
+    <div className="relative group border-0">
       <button
         type="button"
         aria-label={copied ? "Copied" : "Copy code"}
@@ -100,9 +88,7 @@ function CodeBlock({
         {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
         <span className="sr-only">{copied ? "Copied" : "Copy code"}</span>
       </button>
-      <pre className={className}>
-        <code className={className} {...rest}>{children}</code>
-      </pre>
+      <pre {...props}>{children}</pre>
     </div>
   );
 }
@@ -119,7 +105,7 @@ export default function MarkdownRenderer({ content }: { content: string }) {
         components={{
           ul: (props) => <ul className="list-disc" {...props} />,
           ol: (props) => <ol className="list-decimal" {...props} />,
-          code: CodeBlock,
+          pre: CodeBlockPre,
         }}
       >
         {NormalizeMathTags(content)}

@@ -1,3 +1,14 @@
+# 0.1.6
+
+## What's new
+
+## Fixes
+
+* Fix code block double border issue
+* Fix unspecified / unsupported code block styling issue
+
+## Changes
+
 # 0.1.5
 
 ## What's new

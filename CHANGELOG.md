@@ -1,3 +1,16 @@
+# 0.1.7
+
+## What's new
+
+## Fixes
+
+* Fix input box input location jumping on chinese character input or dragging.
+
+## Changes
+
+* Remember input box size when switching chats
+* Remember scroll location when switching chats
+
 # 0.1.6
 
 ## What's new

@@ -17,6 +17,10 @@ interface ChatProps {
   selectedModelId?: string;
   titleGenerationModelId?: string;
   initialUserMessage?: ServerTypes.Message;
+  inputHeight: number;
+  onInputHeightChange: (height: number) => void;
+  initialScrollPosition?: number;
+  onScrollPositionChange?: (scrollTop: number) => void;
 }
 
 export function Chat({ 
@@ -26,11 +30,16 @@ export function Chat({
   activeChatId,
   selectedModelId,
   titleGenerationModelId,
-  initialUserMessage
+  initialUserMessage,
+  inputHeight,
+  onInputHeightChange,
+  initialScrollPosition,
+  onScrollPositionChange,
 }: ChatProps) {
 
   const [generating, setGenerating] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [treeHistory, setTreeHistory] = useState<ServerTypes.TreeHistory>({ nodes: {} });
   const [tailNodeId, setTailNodeId] = useState<string | undefined>(undefined);
   const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.Message | undefined>(undefined);
@@ -44,6 +53,7 @@ export function Chat({
   const initializationCalled = useRef(false);
   const generatingCounter = useRef(0);
   const initialGenerationScrollDone = useRef(false);
+  const scrollRestored = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -54,7 +64,8 @@ export function Chat({
     }
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     setUserDetachedFromBottom(distanceFromBottom > 20);
-  }, []);
+    onScrollPositionChange?.(container.scrollTop);
+  }, [onScrollPositionChange]);
 
   useEffect(() => {
     if (!generating || !bottomRef.current) {
@@ -253,6 +264,7 @@ export function Chat({
         onUserMessage(initialUserMessage);
         /** generate chat title concurrently */
         generateChatTitleAsync(activeChatId, initialUserMessage);
+        setInitialLoadComplete(true);
         return;
       }
       /** Existing chat */
@@ -276,10 +288,18 @@ export function Chat({
         }
       } finally {
         setLoadingChat(false);
+        setInitialLoadComplete(true);
       }
     })();
   /** Only load once */
   }, []);
+
+  useEffect(() => {
+    if (initialLoadComplete && !scrollRestored.current && initialScrollPosition !== undefined && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = initialScrollPosition;
+      scrollRestored.current = true;
+    }
+  }, [initialLoadComplete, initialScrollPosition]);
 
   const getLinearHistory = useCallback(() : ServerTypes.MessageNode[] => {
     const nodes: ServerTypes.MessageNode[] = [];
@@ -470,6 +490,8 @@ export function Chat({
         onUserMessage={onUserMessage}
         inputEnabled={!loadingChat && !generating && generationError === undefined}
         initialMessage={editingBranch ? messageToEdit : undefined}
+        editorHeight={inputHeight}
+        onEditorHeightChange={onInputHeightChange}
       />
     </div>
   );

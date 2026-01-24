@@ -21,9 +21,11 @@ export default function ChatPage() {
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
   const [initialized, setInitialized] = useState(false);
   const [newChatUserMessage, setNewChatUserMessage] = useState<ServerTypes.Message|undefined>(undefined);
+  const [inputHeight, setInputHeight] = useState<number>(80);
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
   const updateChatListPromise = useRef<Promise<void>|undefined>(undefined);
+  const scrollPositions = useRef<Record<string, number>>({});
 
   const onSwitchChat = useCallback((chatId: string | undefined) => {
     setActiveChatId(chatId);
@@ -69,6 +71,12 @@ export default function ChatPage() {
       });
     });
   }, []);
+
+  const onScrollPositionChange = useCallback((scrollTop: number) => {
+    if (activeChatId) {
+      scrollPositions.current[activeChatId] = scrollTop;
+    }
+  }, [activeChatId]);
 
   const updateChatListAsync = useCallback(async (fromStart?: boolean) => {
     /** Allow two trials in case of resource conflict */
@@ -187,6 +195,10 @@ export default function ChatPage() {
           selectedModelId={selectedModelId}
           titleGenerationModelId={titleGenerationModelId}
           initialUserMessage={newChatUserMessage}
+          inputHeight={inputHeight}
+          onInputHeightChange={setInputHeight}
+          initialScrollPosition={activeChatId ? scrollPositions.current[activeChatId] : undefined}
+          onScrollPositionChange={onScrollPositionChange}
         />
       </div>
     </div>

@@ -12,9 +12,12 @@ interface UserInputProps {
   /** This controls the send button. Not the editor. */
   inputEnabled: boolean;
   initialMessage?: ServerTypes.Message;
+  /** Optional controlled height for the editor. */
+  editorHeight?: number;
+  onEditorHeightChange?: (height: number) => void;
 }
 
-export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserInputProps) {
+export function UserInput({ onUserMessage, inputEnabled, initialMessage, editorHeight: controlledHeight, onEditorHeightChange }: UserInputProps) {
   /** Text input */
   const [inputValue, setInputValue] = React.useState(
     initialMessage?.content
@@ -31,12 +34,23 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
   const MIN_HEIGHT = 80;
   const MAX_HEIGHT = 400;
 
-  const [editorHeight, setEditorHeight] = React.useState<number>(MIN_HEIGHT);
+  const [uncontrolledEditorHeight, setUncontrolledEditorHeight] = React.useState<number>(MIN_HEIGHT);
   const startYRef = React.useRef<number | null>(null);
   const startHeightRef = React.useRef<number>(0);
   const draggingRef = React.useRef(false);
   const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const isControlled = controlledHeight !== undefined;
+  const editorHeight = isControlled ? controlledHeight as number : uncontrolledEditorHeight;
+  const setEditorHeight = React.useCallback((height: number) => {
+    const clamped = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, height));
+    if (isControlled) {
+      onEditorHeightChange?.(clamped);
+    } else {
+      setUncontrolledEditorHeight(clamped);
+    }
+  }, [isControlled, onEditorHeightChange]);
 
   const beginDrag = (e: React.MouseEvent) => {
     startYRef.current = e.clientY;
@@ -82,7 +96,7 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [editorHeight]);
+  }, [editorHeight, setEditorHeight]);
 
   React.useLayoutEffect(() => {
     const ta = textAreaRef.current;

@@ -21,6 +21,7 @@ export default function ChatPage() {
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
   const [initialized, setInitialized] = useState(false);
   const [newChatUserMessage, setNewChatUserMessage] = useState<ServerTypes.Message|undefined>(undefined);
+  const [inputHeight, setInputHeight] = useState<number>(80);
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
   const updateChatListPromise = useRef<Promise<void>|undefined>(undefined);
@@ -187,6 +188,8 @@ export default function ChatPage() {
           selectedModelId={selectedModelId}
           titleGenerationModelId={titleGenerationModelId}
           initialUserMessage={newChatUserMessage}
+          inputHeight={inputHeight}
+          onInputHeightChange={setInputHeight}
         />
       </div>
     </div>

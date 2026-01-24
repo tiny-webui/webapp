@@ -17,6 +17,8 @@ interface ChatProps {
   selectedModelId?: string;
   titleGenerationModelId?: string;
   initialUserMessage?: ServerTypes.Message;
+  inputHeight: number;
+  onInputHeightChange: (height: number) => void;
 }
 
 export function Chat({ 
@@ -26,7 +28,9 @@ export function Chat({
   activeChatId,
   selectedModelId,
   titleGenerationModelId,
-  initialUserMessage
+  initialUserMessage,
+  inputHeight,
+  onInputHeightChange,
 }: ChatProps) {
 
   const [generating, setGenerating] = useState(false);
@@ -470,6 +474,8 @@ export function Chat({
         onUserMessage={onUserMessage}
         inputEnabled={!loadingChat && !generating && generationError === undefined}
         initialMessage={editingBranch ? messageToEdit : undefined}
+        editorHeight={inputHeight}
+        onEditorHeightChange={onInputHeightChange}
       />
     </div>
   );

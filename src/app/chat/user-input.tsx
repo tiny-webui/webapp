@@ -36,6 +36,7 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
   const startHeightRef = React.useRef<number>(0);
   const draggingRef = React.useRef(false);
   const textAreaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   const beginDrag = (e: React.MouseEvent) => {
     startYRef.current = e.clientY;
@@ -83,16 +84,28 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
     };
   }, [editorHeight]);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     const ta = textAreaRef.current;
-    const parent = ta?.parentElement;
-    if (ta && parent) {
-      const childRect = ta.getBoundingClientRect();
-      const parentRect = parent.getBoundingClientRect();
-      const maxVisibleHeight = parentRect.height - (childRect.top - parentRect.top) - 8;
-      ta.style.height = "auto";
-      const targetHeight = Math.max(ta.scrollHeight, maxVisibleHeight);
-      ta.style.height = `${targetHeight}px`;
+    const scrollEl = scrollContainerRef.current;
+    if (!ta || !scrollEl) return;
+
+    const wasAtBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 8;
+    const previousScrollTop = scrollEl.scrollTop;
+
+    ta.style.height = "auto";
+
+    const parentRect = scrollEl.getBoundingClientRect();
+    const childRect = ta.getBoundingClientRect();
+    const maxVisibleHeight = parentRect.height - (childRect.top - parentRect.top) - 8;
+    const targetHeight = Math.max(ta.scrollHeight, maxVisibleHeight);
+
+    ta.style.height = `${targetHeight}px`;
+
+    // Restore scroll to where the user was, or keep the caret visible at the bottom.
+    if (wasAtBottom) {
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+    } else {
+      scrollEl.scrollTop = previousScrollTop;
     }
   }, [editorHeight, inputValue, imageUrls]);
 
@@ -184,6 +197,7 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage }: UserI
                 "absolute inset-0 flex flex-col overflow-y-auto rounded-md border border-input bg-transparent",
                 "scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent"
               )}
+              ref={scrollContainerRef}
             >
               {imageUrls.length > 0 && (
                 <div className="p-2 flex flex-wrap gap-2">

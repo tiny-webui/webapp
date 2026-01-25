@@ -7,10 +7,18 @@ import { HandshakeMessage, HandshakeMessageType } from "../cipher/handshake-mess
 import * as IServer from "../types/IServer";
 import { isSecureContext } from "./secure-context";
 import { sodium } from "../cipher/sodium";
+import { Zstd } from "@hpcc-js/wasm-zstd";
+
+const zstd = await Zstd.load();
 
 enum ProtocolType {
     Password = 0,
     Psk = 1,
+};
+
+enum CompressionType {
+    None =0,
+    Zstd = 1,
 };
 
 export class Connection extends IConnection {
@@ -123,6 +131,7 @@ export class Connection extends IConnection {
     }
 
     send(data: Uint8Array): void {
+        data = this.#compressData(data);
         if (!this.#turnOffEncryption) {
             if (this.#encryptor === undefined) {
                 throw new Error("Encryption not established");
@@ -143,7 +152,41 @@ export class Connection extends IConnection {
             }
             data = this.#decryptor.decrypt(data);
         }
+        data = this.#decompressData(data);
         return data;
+    }
+
+    #compressData(data: Uint8Array): Uint8Array {
+        if (data.length < 100) {
+            /** Not worth it */
+            return this.#formCompressedData(data, CompressionType.None);
+        }
+        const compressed = zstd.compress(data, 3);
+        if (compressed.length + 1 >= data.length) {
+            /** Compression not effective */
+            return this.#formCompressedData(data, CompressionType.None);
+        }
+        return this.#formCompressedData(compressed, CompressionType.Zstd);
+    }
+
+    #formCompressedData(data: Uint8Array, type: CompressionType): Uint8Array {
+        const result = new Uint8Array(1 + data.length);
+        result[0] = type;
+        result.set(data, 1);
+        return result;
+    }
+
+    #decompressData(data: Uint8Array): Uint8Array {
+        const type = data[0];
+        const compressedData = data.subarray(1);
+        switch (type) {
+            case CompressionType.None:
+                return compressedData;
+            case CompressionType.Zstd:
+                return zstd.decompress(compressedData);
+            default:
+                throw new Error("Unknown compression type");
+        }
     }
 }
 

@@ -1,3 +1,16 @@
+# 0.2.0
+
+This is a breaking change and requires the backend with version 0.2.x.
+
+## What's new
+
+* **[Breaking]** Add adaptive application level message compression.
+* Convert all images to jpeg for better efficiency and compatibility.
+
+## Fixes
+
+## Changes
+
 # 0.1.7
 
 ## What's new

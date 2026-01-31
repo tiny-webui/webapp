@@ -7,6 +7,54 @@ import React from "react";
 import * as ServerTypes from "@/sdk/types/IServer";
 import { cn } from "@/lib/utils";
 
+const readBlobAsDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result as string);
+  reader.onerror = () => reject(reader.error);
+  reader.readAsDataURL(blob);
+});
+
+const reencodeImageToJpeg = (file: File) => new Promise<string>((resolve, reject) => {
+  const objectUrl = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas context unavailable"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objectUrl);
+        if (!blob) {
+          reject(new Error("Failed to encode JPEG"));
+          return;
+        }
+        readBlobAsDataUrl(blob).then(resolve).catch(reject);
+      }, "image/jpeg", 0.92);
+    } catch (err) {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    }
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error("Failed to load pasted image"));
+  };
+  img.src = objectUrl;
+});
+
+const ensureJpegDataUrl = (file: File) => {
+  if (file.type === "image/jpeg") {
+    return readBlobAsDataUrl(file);
+  }
+  return reencodeImageToJpeg(file).catch(() => readBlobAsDataUrl(file));
+};
+
 interface UserInputProps {
   onUserMessage: (message: ServerTypes.Message) => void;
   /** This controls the send button. Not the editor. */
@@ -167,12 +215,7 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage, editorH
       if (item.kind === "file" && item.type.startsWith("image/")) {
         const file = item.getAsFile();
         if (!file) continue;
-        filePromises.push(new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        }));
+        filePromises.push(ensureJpegDataUrl(file));
       }
     }
     if (filePromises.length > 0) {

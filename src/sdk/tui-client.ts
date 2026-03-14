@@ -4,6 +4,24 @@ import * as websocket from './session/websocket-client'
 import * as types from './types/IServer';
 import { PagedResourceCache, ResourceCache } from './app/resource-cache';
 
+function Base64Encode(binary: Uint8Array): string {
+    let binaryStr = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < binary.length; i += chunkSize) {
+        binaryStr += String.fromCharCode(...binary.subarray(i, i + chunkSize));
+    }
+    return btoa(binaryStr);
+}
+
+function Base64Decode(base64: string): Uint8Array {
+    const binaryStr = atob(base64);
+    const binary = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+        binary[i] = binaryStr.charCodeAt(i);
+    }
+    return binary;
+}
+
 export class TUIClient implements types.IServer {
     #url: string;
     #onDisconnected: (error: unknown | undefined) => void;
@@ -701,5 +719,129 @@ export class TUIClient implements types.IServer {
                 }
             );
         }
+    }
+
+    async putFileAsync(params: {
+        content: Uint8Array;
+        metadata: unknown;
+    }): Promise<types.PutFileResult> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const contentBase64 = Base64Encode(params.content);
+        const result = await this.#rpcClient.makeRequestAsync<types.PutFileParams, types.PutFileResult>('putFile', {
+            fileMetadata: params.metadata,
+            contentBase64: contentBase64
+        });
+        if (typeof result.fileId !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, fileId should be a string");
+        }
+        if (typeof result.contentId !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, contentId should be a string");
+        }
+        this.#cache.update<types.GetFileMetaResult>(() => {
+            return {
+                contentId: result.contentId,
+                fileMetadata: params.metadata,
+            }
+        }, ['fileMeta', result.fileId]);
+        this.#cache.update<Uint8Array>(value => {
+            if (value !== undefined) {
+                return value;
+            }
+            return params.content;
+        }, ['fileContent', result.contentId]);
+        this.#cache.update<types.ListFileResult>(list => {
+            list = list ?? [];
+            list.unshift({
+                fileId: result.fileId,
+                contentId: result.contentId,
+                fileMetadata: params.metadata,
+            });
+            return list;
+        }, ['fileList']);
+        return result;
+    }
+
+    async #getFileMetaAsync(params: types.GetFileMetaParams): Promise<types.GetFileMetaResult> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<types.GetFileMetaParams, types.GetFileMetaResult>(
+            'getFileMeta', params);
+        if (typeof result.contentId !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, contentId should be a string");
+        }
+        if (typeof result.fileMetadata !== 'object' || result.fileMetadata === null) {
+            throw new rpc.RequestError(-1, "Invalid response, fileMetadata should be an object");
+        }
+        return result;
+    }
+
+    async getFileMetaAsync(params: types.GetFileMetaParams): Promise<types.GetFileMetaResult> {
+        /** The file list content will not change because of this. Since the elements are constants. */
+        return await this.#cache.getConstAsync(this.#getFileMetaAsync.bind(this), ['fileMeta', params.fileId], params);
+    }
+
+    async getFileContentAsync(params: types.GetFileContentParams): Promise<{ content: Uint8Array; }> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<types.GetFileContentParams, types.GetFileContentResult>(
+            'getFileContent', params);
+        if (typeof result.contentBase64 !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, contentBase64 should be a string");
+        }
+        const content = Base64Decode(result.contentBase64);
+        this.#cache.update<Uint8Array>(() => {
+            return content;
+        }, ['fileContent', params.contentId]);
+        return { content };
+    }
+
+    async deleteFileAsync(params: types.DeleteFileParams): Promise<void> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const contentId = (await this.getFileMetaAsync({ fileId: params.fileId })).contentId;
+        await this.#rpcClient.makeRequestAsync<types.DeleteFileParams, void>(
+            'deleteFile', params);
+        this.#cache.delete(['fileMeta', params.fileId]);
+        this.#cache.update<types.ListFileResult>(list => {
+            list = list ?? [];
+            return list.filter(file => file.fileId !== params.fileId);
+        }, ['fileList']);
+        /** Check with the latest list to decide if content cache should be cleared. */
+        const fileList = await this.#cache.getAsync(this.#listFileAsync.bind(this), ['fileList']);
+        if (fileList.find(file => file.contentId === contentId) === undefined) {
+            this.#cache.delete(['fileContent', contentId]);
+        }
+    }
+
+    async #listFileAsync(): Promise<types.ListFileResult> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<void, types.ListFileResult>(
+            'listFile', undefined);
+        if (!Array.isArray(result)) {
+            throw new rpc.RequestError(-1, "Invalid response, result should be an array");
+        }
+        for (const item of result) {
+            if (typeof item.fileId !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid response, fileId should be a string");
+            }
+            if (typeof item.contentId !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid response, contentId should be a string");
+            }
+            if (typeof item.fileMetadata !== 'object' || item.fileMetadata === null) {
+                throw new rpc.RequestError(-1, "Invalid response, fileMetadata should be an object");
+            }
+        }
+        return result;
+    }
+
+    async listFileAsync(): Promise<types.ListFileResult> {
+        return await this.#cache.getAsync(this.#listFileAsync.bind(this), ['fileList']);
     }
 }

@@ -16,7 +16,7 @@ export class QuickJSTool extends BaseTool {
     }
 
     get description(): string {
-        return 'Execute a JavaScript script using QuickJS (ES2023 compatible, no Node.js APIs). The specified file content is pre-loaded into a const fileContent string variable. Use console.log() for output.';
+        return 'Execute a JavaScript script using QuickJS (ES2023 compatible, no Node.js APIs). The specified file content is pre-loaded into a const fileContent string variable. The last expression\'s value will be returned as the output.';
     }
 
     get paramSchema(): unknown {
@@ -29,7 +29,7 @@ export class QuickJSTool extends BaseTool {
                 },
                 script: {
                     type: 'string',
-                    description: 'The JavaScript code to execute. The file content is already available as the string variable fileContent. Use console.log() to print results.'
+                    description: 'The JavaScript code to execute. The file content is already available as the string variable fileContent. The last expression\'s value will be returned as the output.'
                 }
             },
             required: ['file', 'script'],
@@ -71,12 +71,16 @@ export class QuickJSTool extends BaseTool {
             const error = vm.dump(result.error);
             result.error.dispose();
             vm.dispose();
-            return `[QuickJS Error] ${error}`;
+            return `[QuickJS Error] ${error.name}: ${error.message}`;
         } else {
             const output = vm.dump(result.value);
             result.value.dispose();
             vm.dispose();
-            return output;
+            if (typeof output === 'object') {
+                return JSON.stringify(output);
+            } else {
+                return `${output}`;
+            }
         }
     }
 }

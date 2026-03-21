@@ -14,7 +14,9 @@ function Base64Encode(binary: Uint8Array): string {
 }
 
 function Base64Decode(base64: string): Uint8Array {
-    const binaryStr = atob(base64);
+    const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+    const converted = padded.replace(/-/g, '+').replace(/_/g, '/');
+    const binaryStr = atob(converted);
     const binary = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) {
         binary[i] = binaryStr.charCodeAt(i);
@@ -245,7 +247,7 @@ export class TUIClient implements types.IServer {
         }
     }
 
-    async * #chatCompletionAsync(params: types.ChatCompletionParams): 
+    async * #chatCompletionAsync(params: types.ChatCompletionParams):
         AsyncGenerator<types.ChatCompletionSegment, types.ChatCompletionInfo, void> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
@@ -886,7 +888,7 @@ export class TUIClient implements types.IServer {
         return await this.#cache.getConstAsync(this.#getFileMetaAsync.bind(this), ['fileMeta', params.fileId], params);
     }
 
-    async getFileContentAsync(params: types.GetFileContentParams): Promise<{ content: Uint8Array; }> {
+    async #getFileContentAsync(params: types.GetFileContentParams): Promise<Uint8Array> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
@@ -899,6 +901,11 @@ export class TUIClient implements types.IServer {
         this.#cache.update<Uint8Array>(() => {
             return content;
         }, ['fileContent', params.contentId]);
+        return content;
+    }
+
+    async getFileContentAsync(params: types.GetFileContentParams): Promise<{ content: Uint8Array; }> {
+        const content = await this.#cache.getConstAsync(this.#getFileContentAsync.bind(this), ['fileContent', params.contentId], params);
         return { content };
     }
 

@@ -7,7 +7,25 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  /* other config options can go here */
+  // quickjs-emscripten's emscripten-generated code has require("fs") inside a
+  // Node.js-only branch that never executes in the browser. Stub it for both bundlers.
+  turbopack: {
+    resolveAlias: {
+      fs: './src/stubs/empty-module.ts',
+    },
+  },
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+    };
+    config.experiments = {
+      ...config.experiments,
+      topLevelAwait: true,
+    };
+    return config;
+  },
 };
 
 export default nextConfig;

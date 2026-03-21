@@ -21,9 +21,7 @@ export default function SignIn() {
     
     if (!TUIClientSingleton.exists()) {
       TUIClientSingleton.create(
-        `192.168.31.153:12345`,
-        // '192.168.31.178:12574/api',
-        // `${window.location.host}/api`,
+        `${window.location.host}/api`,
         (error) => {
           /** @todo Handle disconnect properly */
           console.error("TUIClient connection error: ", error);

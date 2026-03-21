@@ -59,7 +59,7 @@ interface UserInputProps {
   onUserMessage: (message: ServerTypes.Message) => void;
   /** This controls the send button. Not the editor. */
   inputEnabled: boolean;
-  initialMessage?: ServerTypes.Message;
+  initialMessage?: ServerTypes.ChatMessage;
   /** Optional controlled height for the editor. */
   editorHeight?: number;
   onEditorHeightChange?: (height: number) => void;
@@ -177,7 +177,7 @@ export function UserInput({ onUserMessage, inputEnabled, initialMessage, editorH
       return;
     }
 
-    const content: ServerTypes.Message["content"] = [];
+    const content: ServerTypes.ChatMessage["content"] = [];
     if (imageUrls.length > 0) {
       for (const url of imageUrls) {
         content.push({ type: "image_url", data: url });

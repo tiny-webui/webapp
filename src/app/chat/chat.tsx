@@ -42,11 +42,11 @@ export function Chat({
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [treeHistory, setTreeHistory] = useState<ServerTypes.TreeHistory>({ nodes: {} });
   const [tailNodeId, setTailNodeId] = useState<string | undefined>(undefined);
-  const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.Message | undefined>(undefined);
-  const [pendingAssistantMessage, setPendingAssistantMessage] = useState<ServerTypes.Message | undefined>(undefined);
+  const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.ChatMessage | undefined>(undefined);
+  const [pendingAssistantMessage, setPendingAssistantMessage] = useState<ServerTypes.ChatMessage | undefined>(undefined);
   const [editingBranch, setEditingBranch] = useState(false);
   const [previousTailNodeId, setPreviousTailNodeId] = useState<string | undefined>(undefined);
-  const [messageToEdit, setMessageToEdit] = useState<ServerTypes.Message | undefined>(undefined);
+  const [messageToEdit, setMessageToEdit] = useState<ServerTypes.ChatMessage | undefined>(undefined);
   const [userDetachedFromBottom, setUserDetachedFromBottom] = useState(false);
   const [generationError, setGenerationError] = useState<unknown | undefined>(undefined);
   const initialUserMessageHandled = useRef(false);
@@ -90,20 +90,36 @@ export function Chat({
     if (modelId === undefined) {
       throw new Error("No model selected for title generation.");
     }
+    if (!('role' in message) || message.role !== 'user') {
+      throw new Error("Title generation can only be triggered by a user message.");
+    }
     /** Avoid messing with the referenced message */
-    message = JSON.parse(JSON.stringify(message)) as ServerTypes.Message;
+    message = JSON.parse(JSON.stringify(message)) as ServerTypes.ChatMessage;
     /** 
      * @todo Modify the server to take a multi message parameter for this.
      * So we can use a developer prompt instead.
      */
-    message.content.unshift({
-      type: 'text',
-      data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
-    });
-    const title = (await TUIClientSingleton.get().executeGenerationTaskAsync({
+    const messages: Array<ServerTypes.ChatMessage> = [
+      {
+        role: 'developer',
+        content: [{
+          type: 'text',
+          data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
+        }]
+      },
+      message
+    ];
+    const response = (await TUIClientSingleton.get().executeGenerationTaskAsync({
       modelId: modelId,
-      message: message
-    })).trim();
+      messages: messages
+    })).messages[0];
+    if (!('role' in response) || response.role !== 'assistant') {
+      throw new Error("Unexpected response message from title generation.");
+    }
+    const title = response.content[0]?.data.trim();
+    if (title === undefined) {
+      throw new Error("No content in title generation response.");
+    }
     await TUIClientSingleton.get().setMetadataAsync({
       path: ['chat', chatId],
       entries: {
@@ -117,7 +133,7 @@ export function Chat({
     if (loadingChat || generating) {
       throw new Error("Cannot send message while loading or generating.");
     }
-    if (message.role !== 'user') {
+    if (!('role' in message) || message.role !== 'user') {
       throw new Error("Only user role messages are allowed to be sent from the input area.");
     }
     if (selectedModelId === undefined) {
@@ -166,7 +182,7 @@ export function Chat({
         id: chatId,
         parent: tailNodeId,
         modelId: selectedModelId,
-        userMessage: message
+        messages: [message]
       });
       while (true) {
         const result = await generator.next();
@@ -175,15 +191,19 @@ export function Chat({
           return;
         }
         if (result.done) {
+          /** @todo: support tool call */
+          if (result.value.messageIds.length !== 2) {
+            throw new Error(`Unexpected number of messages generated: ${result.value.messageIds.length}`);
+          }
           const userMessageNode: ServerTypes.MessageNode = {
-            id: result.value.userMessageId,
+            id: result.value.messageIds[0],
             message: message,
             parent: tailNodeId,
-            children: [result.value.assistantMessageId],
+            children: [result.value.messageIds[1]],
             timestamp: userMessageTimestamp,
           };
           const assistantMessageNode: ServerTypes.MessageNode = {
-            id: result.value.assistantMessageId,
+            id: result.value.messageIds[1],
             message: assistantMessage,
             parent: userMessageNode.id,
             children: [],
@@ -211,6 +231,9 @@ export function Chat({
           setPendingAssistantMessage(undefined);
           break;
         } else {
+          if (typeof result.value !== 'string') {
+            throw new Error('Tool calling is not supported yet.');
+          }
           assistantMessage.content[0].data = assistantMessage.content[0].data + result.value;
           setPendingAssistantMessage({ ...assistantMessage });
         }
@@ -316,10 +339,17 @@ export function Chat({
   }, [tailNodeId, treeHistory]);
 
   const editUserMessage = useCallback((id: string) => {
+    const node = treeHistory.nodes[id];
+    if (node === undefined) {
+      throw new Error(`Inconsistent tree history state: node ${id} not found.`);
+    }
+    if (!('role' in node.message) || node.message.role !== 'user') {
+      throw new Error("Only user messages can be edited.");
+    }
     setEditingBranch(true);
     setPreviousTailNodeId(tailNodeId);
-    setTailNodeId(treeHistory.nodes[id].parent);
-    setMessageToEdit(treeHistory.nodes[id].message);
+    setTailNodeId(node.parent);
+    setMessageToEdit(node.message);
   }, [tailNodeId, treeHistory]);
 
   const cancelEditingUserMessage = useCallback(() => {
@@ -403,12 +433,13 @@ export function Chat({
       >
         <div className="max-w-[900px] mx-auto space-y-4">
           {getLinearHistory()
-            .filter(n => n.message.role !== 'developer')
+            /** @todo: render function calls */
+            .filter(n => 'role' in n.message && n.message.role !== 'developer')
             .map(node => (
               <Message 
                 key={node.id}
-                message={node.message}
-                showButtons={node.message.role === 'user'}
+                message={node.message as ServerTypes.ChatMessage}
+                showButtons={'role' in node.message && node.message.role === 'user'}
                 editable={!loadingChat && !generating && !editingBranch && generationError === undefined}
                 hasPrevious={messageHasPreviousSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}
                 hasNext={messageHasNextSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}

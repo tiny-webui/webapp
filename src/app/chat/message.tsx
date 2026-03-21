@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Pencil, ArrowLeft, ArrowRight } from "lucide-react";
 
 interface MessageProps {
-  message: ServerTypes.Message;
+  message: ServerTypes.ChatMessage;
   showButtons?: boolean;
   editable?: boolean;
   hasPrevious?: boolean;

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "@/components/custom/logo";
 import { UiSettings } from "./tabs/ui-settings";
 import { ChatSettings } from "./tabs/chat-settings";
+import { FileSettings } from "./tabs/file-settings";
 import { ModelSettings } from "./tabs/model-settings";
 import { GlobalSettings } from "./tabs/global-settings";
 import { UserSettings } from "./tabs/user-settings";
@@ -20,6 +21,7 @@ const structure = [
     children: [
       { id: "ui", label: "界面设置" },
       { id: "chat", label: "聊天设置" },
+      { id: "file", label: "文件管理" },
     ],
   },
   {
@@ -136,6 +138,7 @@ export default function SettingsPage() {
           <div className="max-w-[900px] mx-auto space-y-8 py-2">
             {currentTab === "ui" && <UiSettings />}
             {currentTab === "chat" && <ChatSettings />}
+            {currentTab === "file" && <FileSettings />}
             {currentTab === "model" && isAdmin && <ModelSettings />}
             {currentTab === "global" && isAdmin && <GlobalSettings />}
             {currentTab === "user" && isAdmin && <UserSettings />}

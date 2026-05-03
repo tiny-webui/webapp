@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  // Allow loading the dev server from LAN IPs (HMR, RSC payloads, etc.).
+  // Without this, Next.js 15+ blocks dev resource requests when the page is
+  // accessed via anything other than localhost, causing hydration to silently
+  // fail and click handlers (e.g. the sign-in button) to do nothing.
+  allowedDevOrigins: ['192.168.31.153'],
   // quickjs-emscripten's emscripten-generated code has require("fs") inside a
   // Node.js-only branch that never executes in the browser. Stub it for both bundlers.
   turbopack: {

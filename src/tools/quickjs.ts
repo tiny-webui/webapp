@@ -16,7 +16,7 @@ export class QuickJSTool extends BaseTool {
     }
 
     get description(): string {
-        return 'Execute a JavaScript script using QuickJS (ES2023 compatible, no Node.js APIs). The specified file content is pre-loaded into a const fileContent string variable. The last expression\'s value will be returned as the output.';
+        return 'Execute a JavaScript script using QuickJS (ES2023 compatible, no Node.js APIs). The specified file content is pre-loaded into a const fileContent string variable. Non-text files were already converted to plain text. The last expression\'s value will be returned as the output.';
     }
 
     get paramSchema(): unknown {

@@ -13,7 +13,7 @@ export class ListFilesTool extends BaseTool {
     }
 
     get description(): string {
-        return 'List all available context files. Return a JSON array of objects with name and length for each file the user provided.';
+        return 'List all available context files. Return a JSON array of objects with name and length for each file the user provided. Non-text files were already converted to plain text.';
     }
 
     get paramSchema(): unknown {

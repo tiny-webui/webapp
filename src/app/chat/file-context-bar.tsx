@@ -4,6 +4,7 @@ import React, { useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
+import { extractPdfText, isPdfFile } from "@/lib/pdf-extract";
 import { Paperclip, X, Upload, Check, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import * as ServerTypes from "@/sdk/types/IServer";
@@ -14,6 +15,37 @@ export type AttachedFile = {
   /** true if the file was deleted from server but is still referenced in chat metadata */
   deleted?: boolean;
 };
+
+/**
+ * Shape stored in chat metadata under the `contextFiles` key. We persist the
+ * file name alongside the id so we can render attachments without making a
+ * server round trip — and so the user still sees a meaningful name even when
+ * the underlying file has since been deleted server-side.
+ */
+type ContextFileEntry = { fileId: string; name: string };
+
+/** Serialize attached files for persistence (drops the transient `deleted` flag). */
+export function serializeContextFiles(files: AttachedFile[]): ContextFileEntry[] {
+  return files.map((f) => ({ fileId: f.fileId, name: f.name }));
+}
+
+/** Parse the `contextFiles` value loaded from chat metadata. */
+export function parseContextFiles(value: unknown): AttachedFile[] {
+  if (!Array.isArray(value)) return [];
+  const result: AttachedFile[] = [];
+  for (const entry of value) {
+    if (
+      entry &&
+      typeof entry === "object" &&
+      typeof (entry as ContextFileEntry).fileId === "string" &&
+      typeof (entry as ContextFileEntry).name === "string"
+    ) {
+      const e = entry as ContextFileEntry;
+      result.push({ fileId: e.fileId, name: e.name });
+    }
+  }
+  return result;
+}
 
 interface FileContextBarProps {
   chatId: string | undefined;
@@ -66,7 +98,7 @@ export function FileContextBar({
       if (chatId) {
         await TUIClientSingleton.get().setMetadataAsync({
           path: ["chat", chatId],
-          entries: { contextFileIds: next.map((f) => f.fileId) },
+          entries: { contextFiles: serializeContextFiles(next) },
         });
       }
     },
@@ -81,7 +113,7 @@ export function FileContextBar({
       if (chatId) {
         await TUIClientSingleton.get().setMetadataAsync({
           path: ["chat", chatId],
-          entries: { contextFileIds: next.map((f) => f.fileId) },
+          entries: { contextFiles: serializeContextFiles(next) },
         });
       }
     },
@@ -98,34 +130,52 @@ export function FileContextBar({
       setUploading(true);
       setUploadError(undefined);
       try {
-        /** Read as ArrayBuffer for UTF-8 validation */
+        /** Read as ArrayBuffer for either UTF-8 validation or PDF parsing */
         const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
+        let bytes = new Uint8Array(buffer);
+        let uploadName = file.name;
 
-        /** Validate full UTF-8 text */
-        const decoder = new TextDecoder("utf-8", { fatal: true });
-        try {
-          decoder.decode(bytes);
-        } catch {
-          setUploadError("文件不是有效的 UTF-8 文本文件。");
-          return;
+        if (isPdfFile(file)) {
+          /** Parse PDF to plain text on the client; server stores the text only. */
+          let text: string;
+          try {
+            text = await extractPdfText(bytes);
+          } catch (err) {
+            setUploadError(
+              err instanceof Error ? `PDF 解析失败: ${err.message}` : "PDF 解析失败"
+            );
+            return;
+          }
+          bytes = new TextEncoder().encode(text);
+          /** Preserve original name with a `.txt` suffix so downstream tools
+           *  see a plain-text file. */
+          uploadName = `${file.name}.txt`;
+        } else {
+          /** Validate full UTF-8 text */
+          const decoder = new TextDecoder("utf-8", { fatal: true });
+          try {
+            decoder.decode(bytes);
+          } catch {
+            setUploadError("文件不是有效的 UTF-8 文本文件。");
+            return;
+          }
         }
 
         /** Upload */
-        const metadata = { name: file.name, uploadTime: Date.now() };
+        const metadata = { name: uploadName, uploadTime: Date.now() };
         const result = await TUIClientSingleton.get().putFileAsync({
           content: bytes,
           metadata,
         });
 
         /** Attach to chat */
-        const newFile: AttachedFile = { fileId: result.fileId, name: file.name };
+        const newFile: AttachedFile = { fileId: result.fileId, name: uploadName };
         const next = [...attachedFiles, newFile];
         onAttachedFilesChange(next);
         if (chatId) {
           await TUIClientSingleton.get().setMetadataAsync({
             path: ["chat", chatId],
-            entries: { contextFileIds: next.map((f) => f.fileId) },
+            entries: { contextFiles: serializeContextFiles(next) },
           });
         }
 
@@ -212,7 +262,7 @@ export function FileContextBar({
               ref={fileInputRef}
               type="file"
               className="hidden"
-              accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.sql,.sh,.bat,.ps1,.html,.css,.scss,.less,.svg"
+              accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.sql,.sh,.bat,.ps1,.html,.css,.scss,.less,.svg,.pdf"
               onChange={handleUpload}
             />
           </div>

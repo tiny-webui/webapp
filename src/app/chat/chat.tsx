@@ -7,7 +7,7 @@ import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import { UserInput } from "./user-input";
 import { Message } from "./message";
 import { AssistantTurn, type PendingTurnPart, type CommittedTurnPart } from "./assistant-turn";
-import { FileContextBar, type AttachedFile } from "./file-context-bar";
+import { FileContextBar, type AttachedFile, serializeContextFiles, parseContextFiles } from "./file-context-bar";
 import { ListFilesTool, type ListFilesToolContext } from "@/tools/list-files";
 import { QuickJSTool, type QuickJSToolContext } from "@/tools/quickjs";
 import { RequestError } from "@/sdk/app/rpc";
@@ -182,7 +182,7 @@ export function Chat({
         if (attachedFiles.length > 0) {
           TUIClientSingleton.get().setMetadataAsync({
             path: ['chat', chatId],
-            entries: { contextFileIds: attachedFiles.filter(f => !f.deleted).map(f => f.fileId) },
+            entries: { contextFiles: serializeContextFiles(attachedFiles.filter(f => !f.deleted)) },
           });
         }
         return;
@@ -399,24 +399,17 @@ export function Chat({
           }
           setTailNodeId(latestNode.id);
         }
-        /** Load attached files from chat metadata */
+        /** Load attached files from chat metadata. We persist the file
+         *  name alongside the id, so no per-file server lookup is needed —
+         *  this also avoids spurious errors when a file has been deleted
+         *  server-side. Deletion is detected lazily at message-send time. */
         try {
           const meta = await TUIClientSingleton.get().getMetadataAsync({
             path: ['chat', activeChatId],
-            keys: ['contextFileIds'],
+            keys: ['contextFiles'],
           });
-          const fileIds = Array.isArray(meta.contextFileIds) ? meta.contextFileIds as string[] : [];
-          if (fileIds.length > 0) {
-            const loadedFiles: AttachedFile[] = [];
-            for (const fileId of fileIds) {
-              try {
-                const fileMeta = await TUIClientSingleton.get().getFileMetaAsync({ fileId });
-                const name = (fileMeta.fileMetadata as { name?: string })?.name ?? fileId;
-                loadedFiles.push({ fileId, name });
-              } catch {
-                loadedFiles.push({ fileId, name: fileId, deleted: true });
-              }
-            }
+          const loadedFiles = parseContextFiles(meta.contextFiles);
+          if (loadedFiles.length > 0) {
             setAttachedFiles(loadedFiles);
             onAttachedFilesChange?.(loadedFiles);
           }

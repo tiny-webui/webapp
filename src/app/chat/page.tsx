@@ -21,6 +21,7 @@ export default function ChatPage() {
   const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
   const [initialized, setInitialized] = useState(false);
   const [newChatUserMessage, setNewChatUserMessage] = useState<ServerTypes.Message|undefined>(undefined);
+  const [newChatAttachedFiles, setNewChatAttachedFiles] = useState<import('./file-context-bar').AttachedFile[]>([]);
   const [inputHeight, setInputHeight] = useState<number>(80);
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
@@ -30,19 +31,21 @@ export default function ChatPage() {
   const onSwitchChat = useCallback((chatId: string | undefined) => {
     setActiveChatId(chatId);
     setNewChatUserMessage(undefined);
+    setNewChatAttachedFiles([]);
   }, []);
 
   function onChatDisplayRangeChange(max: number) {
     maxDisplayedChatIndex.current = max;
   }
 
-  const onCreateChat = useCallback((chatId: string, message: ServerTypes.Message) => {
+  const onCreateChat = useCallback((chatId: string, message: ServerTypes.Message, attachedFiles: import('./file-context-bar').AttachedFile[]) => {
     const chatInfo = {
       id: chatId
     };
     setChatList(prev => [chatInfo, ...prev]);
     setActiveChatId(chatId);
     setNewChatUserMessage(message);
+    setNewChatAttachedFiles(attachedFiles);
   }, []);
 
   const onDeleteChat = useCallback((chatId: string) => {
@@ -199,6 +202,7 @@ export default function ChatPage() {
           onInputHeightChange={setInputHeight}
           initialScrollPosition={activeChatId ? scrollPositions.current[activeChatId] : undefined}
           onScrollPositionChange={onScrollPositionChange}
+          initialAttachedFiles={newChatAttachedFiles}
         />
       </div>
     </div>

@@ -28,6 +28,20 @@ export class ResourceCache {
         }
     }
 
+    async getConstAsync<T, Args extends unknown[]>(
+        getter: (...args: Args) => Promise<T>,
+        resourceKey: string[],
+        ...args: Args
+    ): Promise<T> {
+        const key = this.#getKey(resourceKey);
+        if (this.#cache.has(key)) {
+            return this.#cache.get(key) as T;
+        }
+        const value = await getter(...args);
+        this.#cache.set(key, value);
+        return value;
+    }
+
     update<T>(
         updater: (value: T | undefined) => T,
         resourceKey: string[]

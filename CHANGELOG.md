@@ -1,3 +1,16 @@
+# 0.3.0
+
+This is a breaking change and requires the backend with version 0.3.x.
+
+## What's new
+
+* **[Breaking]** Support tool calling.
+* **[Breaking]** Support file operations.
+
+## Fixes
+
+## Changes
+
 # 0.2.0
 
 This is a breaking change and requires the backend with version 0.2.x.

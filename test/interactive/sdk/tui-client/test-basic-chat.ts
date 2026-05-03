@@ -61,20 +61,22 @@ while(true)
         id: chatId,
         modelId: modelId,
         parent: parentId,
-        userMessage: {
+        messages: [{
             role: 'user',
             content:[{
                 type: 'text',
                 data: userMessage
             }]
-        }
+        }]
     });
 
     console.log("Assistant: ");
     let result = undefined;
     while(!(result = await stream.next()).done){
         const chunk = result.value;
-        process.stdout.write(chunk);
+        if (typeof chunk === 'string') {
+            process.stdout.write(chunk);
+        }
     }
     console.log("\n");
     /** The chat info */
@@ -83,6 +85,6 @@ while(true)
         exit(1);
     }
     const info = result.value;
-    parentId = info.assistantMessageId;
+    parentId = info.messageIds[info.messageIds.length - 1];
 }
 

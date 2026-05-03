@@ -4,6 +4,26 @@ import * as websocket from './session/websocket-client'
 import * as types from './types/IServer';
 import { PagedResourceCache, ResourceCache } from './app/resource-cache';
 
+function Base64Encode(binary: Uint8Array): string {
+    let binaryStr = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < binary.length; i += chunkSize) {
+        binaryStr += String.fromCharCode(...binary.subarray(i, i + chunkSize));
+    }
+    return btoa(binaryStr);
+}
+
+function Base64Decode(base64: string): Uint8Array {
+    const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+    const converted = padded.replace(/-/g, '+').replace(/_/g, '/');
+    const binaryStr = atob(converted);
+    const binary = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+        binary[i] = binaryStr.charCodeAt(i);
+    }
+    return binary;
+}
+
 export class TUIClient implements types.IServer {
     #url: string;
     #onDisconnected: (error: unknown | undefined) => void;
@@ -176,13 +196,64 @@ export class TUIClient implements types.IServer {
         this.#cache.delete(['chat', id]);
     }
 
-    async * #chatCompletionAsync(params: types.ChatCompletionParams): 
-        AsyncGenerator<string, types.ChatCompletionInfo, void> {
+    #validateMessageContent(content: types.MessageContent): void {
+        if (typeof content !== 'object' || content === null) {
+            throw new rpc.RequestError(-1, "Invalid message content, should be an object");
+        }
+        if (content.type !== 'text' && content.type !== 'image_url' && content.type !== 'refusal') {
+            throw new rpc.RequestError(-1, "Invalid message content, invalid type");
+        }
+        if (typeof content.data !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid message content, data should be a string");
+        }
+    }
+
+    #validateMessage(message: types.Message): void {
+        if (typeof message !== 'object' || message === null) {
+            throw new rpc.RequestError(-1, "Invalid message, should be an object");
+        }
+        if ('role' in message) {
+            if (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'developer') {
+                throw new rpc.RequestError(-1, "Invalid message, invalid role");
+            }
+            if (!Array.isArray(message.content)) {
+                throw new rpc.RequestError(-1, "Invalid message, content should be an array");
+            }
+            for (const content of message.content) {
+                this.#validateMessageContent(content);
+            }
+        } else if (message.type === 'function_call') {
+            if (typeof message.call_id !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid message, call_id should be a string");
+            }
+            if (typeof message.name !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid message, name should be a string");
+            }
+            if (typeof message.arguments !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid message, arguments should be a string");
+            }
+        } else if (message.type === 'function_call_output') {
+            if (typeof message.call_id !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid message, call_id should be a string");
+            }
+            if (!Array.isArray(message.output)) {
+                throw new rpc.RequestError(-1, "Invalid message, output should be an array");
+            }
+            for (const content of message.output) {
+                this.#validateMessageContent(content);
+            }
+        } else {
+            throw new rpc.RequestError(-1, "Invalid message, unknown type");
+        }
+    }
+
+    async * #chatCompletionAsync(params: types.ChatCompletionParams):
+        AsyncGenerator<types.ChatCompletionSegment, types.ChatCompletionInfo, void> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
         /** Incrase timeout to 2min for thinking models. */
-        const generator = this.#rpcClient.makeStreamRequestAsync<types.ChatCompletionParams, string, types.ChatCompletionInfo>(
+        const generator = this.#rpcClient.makeStreamRequestAsync<types.ChatCompletionParams, types.ChatCompletionSegment, types.ChatCompletionInfo>(
             'chatCompletion', params, 120_000);
         while (true) {
             const it = await generator.next();
@@ -190,16 +261,41 @@ export class TUIClient implements types.IServer {
                 if (typeof it.value !== 'object' || it.value === null) {
                     throw new rpc.RequestError(-1, "Invalid final response, value should be an object");
                 }
-                if (typeof it.value.userMessageId !== 'string') {
-                    throw new rpc.RequestError(-1, "Invalid final response, invalid userMessageId");
+                if (!Array.isArray(it.value.messageIds)) {
+                    throw new rpc.RequestError(-1, "Invalid final response, messageIds should be an array");
                 }
-                if (typeof it.value.assistantMessageId !== 'string') {
-                    throw new rpc.RequestError(-1, "Invalid final response, invalid assistantMessageId");
+                for (const messageId of it.value.messageIds) {
+                    if (typeof messageId !== 'string') {
+                        throw new rpc.RequestError(-1, "Invalid final response, messageIds should be an array of strings");
+                    }
                 }
                 return it.value;
             } else {
                 if (typeof it.value !== 'string') {
-                    throw new rpc.RequestError(-1, "Invalid segment, value should be a string");
+                    if (typeof it.value !== 'object' || it.value === null) {
+                        throw new rpc.RequestError(-1, "Invalid segment response, value should be a string or an object");
+                    }
+                    if (it.value.event === 'function_call_start') {
+                        /** Empty case */
+                    } else if (it.value.event === 'function_call_end') {
+                        if (typeof it.value.data !== 'object' || it.value.data === null) {
+                            throw new rpc.RequestError(-1, "Invalid segment response, data should be an object");
+                        }
+                        if (it.value.data.type !== 'function_call') {
+                            throw new rpc.RequestError(-1, "Invalid segment response, data.type should be 'function_call'");
+                        }
+                        if (typeof it.value.data.call_id !== 'string') {
+                            throw new rpc.RequestError(-1, "Invalid segment response, data.call_id should be a string");
+                        }
+                        if (typeof it.value.data.name !== 'string') {
+                            throw new rpc.RequestError(-1, "Invalid segment response, data.name should be a string");
+                        }
+                        if (typeof it.value.data.arguments !== 'string') {
+                            throw new rpc.RequestError(-1, "Invalid segment response, data.arguments should be a string");
+                        }
+                    } else {
+                        throw new rpc.RequestError(-1, "Invalid segment response, unknown event type");
+                    }
                 }
                 yield it.value;
             }
@@ -207,63 +303,90 @@ export class TUIClient implements types.IServer {
     }
 
     async * chatCompletionAsync(params: types.ChatCompletionParams):
-        AsyncGenerator<string, types.ChatCompletionInfo, void> {
-        const userMessageTimestamp = Date.now();
+        AsyncGenerator<types.ChatCompletionSegment, types.ChatCompletionInfo, void> {
+        const requestMessageTimestamp = Date.now();
+        const generatedMessages: Array<types.Message> = [];
         let assistantMessageContent: string = '';
         const generator = this.#chatCompletionAsync(params);
         while (true) {
             const it = await generator.next();
             if (it.done === true) {
+                if (assistantMessageContent.length !== 0) {
+                    generatedMessages.push({
+                        role: 'assistant',
+                        content: [{
+                            type: 'text',
+                            data: assistantMessageContent
+                        }]
+                    });
+                }
+                if (params.messages.length + generatedMessages.length !== it.value.messageIds.length) {
+                    throw new rpc.RequestError(-1, "Invalid final response, messageIds length should be equal to the sum of input messages and generated messages");
+                }
+
                 this.#cache.update<types.TreeHistory>((history) => {
                     history = history ?? { nodes: {} } as types.TreeHistory;
                     if (params.parent !== undefined) {
                         const parent = history.nodes[params.parent];
-                        parent?.children.push(it.value.userMessageId);
+                        parent?.children.push(it.value.messageIds[0]);
                     }
-                    history.nodes[it.value.userMessageId] = {
-                        id: it.value.userMessageId,
-                        message: params.userMessage,
-                        parent: params.parent,
-                        children: [it.value.assistantMessageId],
-                        /** 
-                         * This will differ from the server side value.
-                         * But that won't be a significant problem.
-                         * DO NOT use this as a unique identifier.
-                         */
-                        timestamp: userMessageTimestamp
-                    };
-                    history.nodes[it.value.assistantMessageId] = {
-                        id: it.value.assistantMessageId,
-                        message: {
+                    let i = 0;
+                    const allMessages = [...params.messages, ...generatedMessages];
+                    for (const message of allMessages) {
+                        history.nodes[it.value.messageIds[i]] = {
+                            id: it.value.messageIds[i],
+                            message: message,
+                            parent: i === 0 ? params.parent : it.value.messageIds[i - 1],
+                            children: i === allMessages.length - 1 ? [] : [it.value.messageIds[i + 1]],
+                            timestamp: i < params.messages.length ? requestMessageTimestamp : Date.now()
+                        }
+                        i++;
+                    }
+                    return history;
+                }, ['chat', params.id]);
+                return it.value;
+            } else {
+                if (typeof it.value === 'string') {
+                    assistantMessageContent += it.value;
+                } else if (it.value.event === 'function_call_start') {
+                    if (assistantMessageContent.length !== 0) {
+                        generatedMessages.push({
                             role: 'assistant',
                             content: [{
                                 type: 'text',
                                 data: assistantMessageContent
                             }]
-                        },
-                        parent: it.value.userMessageId,
-                        children: [],
-                        /** This will also differ from the server side value */
-                        timestamp: Date.now()
-                    };
-                    return history;
-                }, ['chat', params.id]);
-                return it.value;
-            } else {
-                assistantMessageContent += it.value;
+                        });
+                    }
+                    assistantMessageContent = '';
+                } else {
+                    generatedMessages.push({
+                        type: 'function_call',
+                        call_id: it.value.data.call_id,
+                        name: it.value.data.name,
+                        arguments: it.value.data.arguments,
+                        extra: it.value.data.extra
+                    });
+                }
                 yield it.value;
             }
         }
     }
 
-    async executeGenerationTaskAsync(params: types.executeGenerationTaskParams): Promise<string> {
+    async executeGenerationTaskAsync(params: types.executeGenerationTaskParams): Promise<types.executeGenerationTaskResult> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
         }
-        const result = await this.#rpcClient.makeRequestAsync<types.executeGenerationTaskParams, string>(
+        const result = await this.#rpcClient.makeRequestAsync<types.executeGenerationTaskParams, types.executeGenerationTaskResult>(
             'executeGenerationTask', params);
-        if (typeof result !== 'string') {
-            throw new rpc.RequestError(-1, "Invalid response, result should be a string");
+        if (typeof result !== 'object' || result === null) {
+            throw new rpc.RequestError(-1, "Invalid response, result should be an object");
+        }
+        if (!Array.isArray(result.messages)) {
+            throw new rpc.RequestError(-1, "Invalid response, messages should be an array");
+        }
+        for (const message of result.messages) {
+            this.#validateMessage(message);
         }
         return result;
     }
@@ -701,5 +824,134 @@ export class TUIClient implements types.IServer {
                 }
             );
         }
+    }
+
+    async putFileAsync(params: {
+        content: Uint8Array;
+        metadata: unknown;
+    }): Promise<types.PutFileResult> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const contentBase64 = Base64Encode(params.content);
+        const result = await this.#rpcClient.makeRequestAsync<types.PutFileParams, types.PutFileResult>('putFile', {
+            fileMetadata: params.metadata,
+            contentBase64: contentBase64
+        });
+        if (typeof result.fileId !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, fileId should be a string");
+        }
+        if (typeof result.contentId !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, contentId should be a string");
+        }
+        this.#cache.update<types.GetFileMetaResult>(() => {
+            return {
+                contentId: result.contentId,
+                fileMetadata: params.metadata,
+            }
+        }, ['fileMeta', result.fileId]);
+        this.#cache.update<Uint8Array>(value => {
+            if (value !== undefined) {
+                return value;
+            }
+            return params.content;
+        }, ['fileContent', result.contentId]);
+        this.#cache.update<types.ListFileResult>(list => {
+            list = list ?? [];
+            list.unshift({
+                fileId: result.fileId,
+                contentId: result.contentId,
+                fileMetadata: params.metadata,
+            });
+            return list;
+        }, ['fileList']);
+        return result;
+    }
+
+    async #getFileMetaAsync(params: types.GetFileMetaParams): Promise<types.GetFileMetaResult> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<types.GetFileMetaParams, types.GetFileMetaResult>(
+            'getFileMeta', params);
+        if (typeof result.contentId !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, contentId should be a string");
+        }
+        if (typeof result.fileMetadata !== 'object' || result.fileMetadata === null) {
+            throw new rpc.RequestError(-1, "Invalid response, fileMetadata should be an object");
+        }
+        return result;
+    }
+
+    async getFileMetaAsync(params: types.GetFileMetaParams): Promise<types.GetFileMetaResult> {
+        /** The file list content will not change because of this. Since the elements are constants. */
+        return await this.#cache.getConstAsync(this.#getFileMetaAsync.bind(this), ['fileMeta', params.fileId], params);
+    }
+
+    async #getFileContentAsync(params: types.GetFileContentParams): Promise<Uint8Array> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<types.GetFileContentParams, types.GetFileContentResult>(
+            'getFileContent', params);
+        if (typeof result.contentBase64 !== 'string') {
+            throw new rpc.RequestError(-1, "Invalid response, contentBase64 should be a string");
+        }
+        const content = Base64Decode(result.contentBase64);
+        this.#cache.update<Uint8Array>(() => {
+            return content;
+        }, ['fileContent', params.contentId]);
+        return content;
+    }
+
+    async getFileContentAsync(params: types.GetFileContentParams): Promise<{ content: Uint8Array; }> {
+        const content = await this.#cache.getConstAsync(this.#getFileContentAsync.bind(this), ['fileContent', params.contentId], params);
+        return { content };
+    }
+
+    async deleteFileAsync(params: types.DeleteFileParams): Promise<void> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const contentId = (await this.getFileMetaAsync({ fileId: params.fileId })).contentId;
+        await this.#rpcClient.makeRequestAsync<types.DeleteFileParams, void>(
+            'deleteFile', params);
+        this.#cache.delete(['fileMeta', params.fileId]);
+        this.#cache.update<types.ListFileResult>(list => {
+            list = list ?? [];
+            return list.filter(file => file.fileId !== params.fileId);
+        }, ['fileList']);
+        /** Check with the latest list to decide if content cache should be cleared. */
+        const fileList = await this.#cache.getAsync(this.#listFileAsync.bind(this), ['fileList']);
+        if (fileList.find(file => file.contentId === contentId) === undefined) {
+            this.#cache.delete(['fileContent', contentId]);
+        }
+    }
+
+    async #listFileAsync(): Promise<types.ListFileResult> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<void, types.ListFileResult>(
+            'listFile', undefined);
+        if (!Array.isArray(result)) {
+            throw new rpc.RequestError(-1, "Invalid response, result should be an array");
+        }
+        for (const item of result) {
+            if (typeof item.fileId !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid response, fileId should be a string");
+            }
+            if (typeof item.contentId !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid response, contentId should be a string");
+            }
+            if (typeof item.fileMetadata !== 'object' || item.fileMetadata === null) {
+                throw new rpc.RequestError(-1, "Invalid response, fileMetadata should be an object");
+            }
+        }
+        return result;
+    }
+
+    async listFileAsync(): Promise<types.ListFileResult> {
+        return await this.#cache.getAsync(this.#listFileAsync.bind(this), ['fileList']);
     }
 }

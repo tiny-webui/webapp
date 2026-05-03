@@ -6,11 +6,20 @@ import * as ServerTypes from "@/sdk/types/IServer";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
 import { UserInput } from "./user-input";
 import { Message } from "./message";
+import { AssistantTurn, type PendingTurnPart, type CommittedTurnPart } from "./assistant-turn";
+import { FileContextBar, type AttachedFile, serializeContextFiles, parseContextFiles } from "./file-context-bar";
+import { ListFilesTool, type ListFilesToolContext } from "@/tools/list-files";
+import { QuickJSTool, type QuickJSToolContext } from "@/tools/quickjs";
 import { RequestError } from "@/sdk/app/rpc";
 import { ErrorCode } from "@/sdk/types/Rpc";
 
+const listFilesTool = new ListFilesTool();
+const quickJSTool = new QuickJSTool();
+
+type ToolContext = ListFilesToolContext & QuickJSToolContext;
+
 interface ChatProps {
-  onCreateChat: (chatId: string, message: ServerTypes.Message) => void;
+  onCreateChat: (chatId: string, message: ServerTypes.Message, attachedFiles: AttachedFile[]) => void;
   onSetChatTitle: (chatId: string, title: string) => void;
   requestChatListUpdateAsync?: () => Promise<void>;
   activeChatId?: string;
@@ -21,6 +30,8 @@ interface ChatProps {
   onInputHeightChange: (height: number) => void;
   initialScrollPosition?: number;
   onScrollPositionChange?: (scrollTop: number) => void;
+  initialAttachedFiles?: AttachedFile[];
+  onAttachedFilesChange?: (files: AttachedFile[]) => void;
 }
 
 export function Chat({ 
@@ -35,6 +46,8 @@ export function Chat({
   onInputHeightChange,
   initialScrollPosition,
   onScrollPositionChange,
+  initialAttachedFiles,
+  onAttachedFilesChange,
 }: ChatProps) {
 
   const [generating, setGenerating] = useState(false);
@@ -42,13 +55,14 @@ export function Chat({
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [treeHistory, setTreeHistory] = useState<ServerTypes.TreeHistory>({ nodes: {} });
   const [tailNodeId, setTailNodeId] = useState<string | undefined>(undefined);
-  const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.Message | undefined>(undefined);
-  const [pendingAssistantMessage, setPendingAssistantMessage] = useState<ServerTypes.Message | undefined>(undefined);
+  const [pendingUserMessage, setPendingUserMessage] = useState<ServerTypes.ChatMessage | undefined>(undefined);
+  const [pendingTurnParts, setPendingTurnParts] = useState<PendingTurnPart[]>([]);
   const [editingBranch, setEditingBranch] = useState(false);
   const [previousTailNodeId, setPreviousTailNodeId] = useState<string | undefined>(undefined);
-  const [messageToEdit, setMessageToEdit] = useState<ServerTypes.Message | undefined>(undefined);
+  const [messageToEdit, setMessageToEdit] = useState<ServerTypes.ChatMessage | undefined>(undefined);
   const [userDetachedFromBottom, setUserDetachedFromBottom] = useState(false);
   const [generationError, setGenerationError] = useState<unknown | undefined>(undefined);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>(initialAttachedFiles ?? []);
   const initialUserMessageHandled = useRef(false);
   const initializationCalled = useRef(false);
   const generatingCounter = useRef(0);
@@ -56,6 +70,11 @@ export function Chat({
   const scrollRestored = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  const handleAttachedFilesChange = useCallback((files: AttachedFile[]) => {
+    setAttachedFiles(files);
+    onAttachedFilesChange?.(files);
+  }, [onAttachedFilesChange]);
 
   const handleScroll = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -71,8 +90,7 @@ export function Chat({
     if (!generating || !bottomRef.current) {
       return;
     }
-    const isInitialAssistantMessage = pendingAssistantMessage?.content.length === 1 && pendingAssistantMessage.content[0].data === '';
-    if (!initialGenerationScrollDone.current && pendingAssistantMessage) {
+    if (!initialGenerationScrollDone.current && pendingTurnParts.length > 0) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
       initialGenerationScrollDone.current = true;
       return;
@@ -80,30 +98,46 @@ export function Chat({
     if (userDetachedFromBottom) {
       return;
     }
-    if (isInitialAssistantMessage || pendingAssistantMessage) {
+    if (pendingTurnParts.length > 0) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [pendingAssistantMessage, generating, userDetachedFromBottom]);
+  }, [pendingTurnParts, generating, userDetachedFromBottom]);
 
   const generateChatTitleAsync = useCallback(async (chatId: string, message: ServerTypes.Message) => {
     const modelId = titleGenerationModelId ?? selectedModelId;
     if (modelId === undefined) {
       throw new Error("No model selected for title generation.");
     }
+    if (!('role' in message) || message.role !== 'user') {
+      throw new Error("Title generation can only be triggered by a user message.");
+    }
     /** Avoid messing with the referenced message */
-    message = JSON.parse(JSON.stringify(message)) as ServerTypes.Message;
+    message = JSON.parse(JSON.stringify(message)) as ServerTypes.ChatMessage;
     /** 
      * @todo Modify the server to take a multi message parameter for this.
      * So we can use a developer prompt instead.
      */
-    message.content.unshift({
-      type: 'text',
-      data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
-    });
-    const title = (await TUIClientSingleton.get().executeGenerationTaskAsync({
+    const messages: Array<ServerTypes.ChatMessage> = [
+      {
+        role: 'developer',
+        content: [{
+          type: 'text',
+          data: 'Generate a concise chat title for the following user message. The title needs to start with a emoji representing the topic, followed by a short text. Only reply the title without any other information. Following is the user message:\n\n'
+        }]
+      },
+      message
+    ];
+    const response = (await TUIClientSingleton.get().executeGenerationTaskAsync({
       modelId: modelId,
-      message: message
-    })).trim();
+      messages: messages
+    })).messages[0];
+    if (!('role' in response) || response.role !== 'assistant') {
+      throw new Error("Unexpected response message from title generation.");
+    }
+    const title = response.content[0]?.data.trim();
+    if (title === undefined) {
+      throw new Error("No content in title generation response.");
+    }
     await TUIClientSingleton.get().setMetadataAsync({
       path: ['chat', chatId],
       entries: {
@@ -117,7 +151,7 @@ export function Chat({
     if (loadingChat || generating) {
       throw new Error("Cannot send message while loading or generating.");
     }
-    if (message.role !== 'user') {
+    if (!('role' in message) || message.role !== 'user') {
       throw new Error("Only user role messages are allowed to be sent from the input area.");
     }
     if (selectedModelId === undefined) {
@@ -143,93 +177,172 @@ export function Chat({
           await requestChatListUpdateAsync?.();
           chatId = await TUIClientSingleton.get().newChatAsync();
         }
-        onCreateChat(chatId, message);
+        onCreateChat(chatId, message, attachedFiles);
+        /** Persist attached file IDs to the newly created chat */
+        if (attachedFiles.length > 0) {
+          TUIClientSingleton.get().setMetadataAsync({
+            path: ['chat', chatId],
+            entries: { contextFiles: serializeContextFiles(attachedFiles.filter(f => !f.deleted)) },
+          });
+        }
         return;
       }
-      const assistantMessage: ServerTypes.Message = {
-        role: 'assistant',
-        content: [
-          {
-            type: 'text',
-            data: ''
+
+      /** Resolve file context for tools */
+      const activeFiles = attachedFiles.filter(f => !f.deleted);
+      let toolContext: ToolContext | undefined;
+      let tools: ServerTypes.Tool[] | undefined;
+      if (activeFiles.length > 0) {
+        const files: ToolContext["files"] = [];
+        for (const af of activeFiles) {
+          try {
+            const meta = await TUIClientSingleton.get().getFileMetaAsync({ fileId: af.fileId });
+            const { content } = await TUIClientSingleton.get().getFileContentAsync({ contentId: meta.contentId });
+            const decoder = new TextDecoder("utf-8", { fatal: true });
+            files.push({ name: af.name, content: decoder.decode(content) });
+          } catch (err) {
+            if (err instanceof RequestError && err.code === ErrorCode.NOT_FOUND) {
+              /** File was deleted server-side; mark it */
+              handleAttachedFilesChange(
+                attachedFiles.map(f => f.fileId === af.fileId ? { ...f, deleted: true } : f)
+              );
+            } else {
+              throw err;
+            }
           }
-        ]
-      };
-      const userMessageTimestamp = Date.now();
+        }
+        if (files.length > 0) {
+          toolContext = { files };
+          tools = [
+            { name: listFilesTool.name, description: listFilesTool.description, parameters: listFilesTool.paramSchema },
+            { name: quickJSTool.name, description: quickJSTool.description, parameters: quickJSTool.paramSchema },
+          ];
+        }
+      }
+
       initialGenerationScrollDone.current = false;
-      setPendingAssistantMessage(assistantMessage);
+
       /** 
-       * This step should start even on mismatch to ensure a concise chat history
-       * @todo: This may throw CONFLICT. If so, we need to update the local history and notify the user about this.
+       * Tool call loop: the generation may request tool calls, we execute them and continue.
+       * The first round sends [userMessage], subsequent rounds send accumulated messages.
        */
-      const generator = TUIClientSingleton.get().chatCompletionAsync({
-        id: chatId,
-        parent: tailNodeId,
-        modelId: selectedModelId,
-        userMessage: message
-      });
+      let pendingMessages: ServerTypes.Message[] = [message];
+      let parentForNextCall = tailNodeId;
+      setPendingTurnParts([]);
+
       while (true) {
-        const result = await generator.next();
+        const pendingFunctionCalls: ServerTypes.FunctionCallMessage[] = [];
+
+        const generator = TUIClientSingleton.get().chatCompletionAsync({
+          id: chatId,
+          parent: parentForNextCall,
+          modelId: selectedModelId,
+          messages: pendingMessages,
+          tools,
+        });
+
+        while (true) {
+          const result = await generator.next();
+          if (originalCounter !== generatingCounter.current) {
+            callMismatch = true;
+            return;
+          }
+          if (result.done) {
+            parentForNextCall = result.value.messageIds[result.value.messageIds.length - 1];
+            break;
+          } else {
+            if (typeof result.value === "string") {
+              const valueString = result.value;
+              setPendingTurnParts(parts => {
+                const lastPart = parts[parts.length - 1];
+                if (lastPart?.type !== 'text') {
+                  return [...parts, { type: "text", content: valueString }];
+                } else {
+                  lastPart.content += result.value;
+                  return [...parts];
+                }
+              });
+            } else if (result.value.event === "function_call_end") {
+              const fc = result.value.data;
+              pendingFunctionCalls.push(fc);
+              setPendingTurnParts(parts => [
+                ...parts,
+                {
+                  type: "tool_call",
+                  call: fc,
+                  status: "calling",
+                }
+              ]);
+            }
+          }
+        }
+
         if (originalCounter !== generatingCounter.current) {
           callMismatch = true;
           return;
         }
-        if (result.done) {
-          const userMessageNode: ServerTypes.MessageNode = {
-            id: result.value.userMessageId,
-            message: message,
-            parent: tailNodeId,
-            children: [result.value.assistantMessageId],
-            timestamp: userMessageTimestamp,
-          };
-          const assistantMessageNode: ServerTypes.MessageNode = {
-            id: result.value.assistantMessageId,
-            message: assistantMessage,
-            parent: userMessageNode.id,
-            children: [],
-            timestamp: Date.now(),
-          };
-          setTreeHistory(prev => ({
-            nodes: {
-              ...Object.fromEntries(Object.entries(prev.nodes).map(([i, n]) => {
-                /** React calls this twice.. */
-                if (n.id === tailNodeId && n.children.indexOf(userMessageNode.id) < 0) {
-                  return [i, {
-                    ...n,
-                    children: [...n.children, userMessageNode.id]
-                  }]
-                } else {
-                  return [i, n];
-                }
-              })),
-              [userMessageNode.id]: userMessageNode,
-              [assistantMessageNode.id]: assistantMessageNode,
-            }
-          }));
-          setTailNodeId(assistantMessageNode.id);
-          setPendingUserMessage(undefined);
-          setPendingAssistantMessage(undefined);
+
+        if (pendingFunctionCalls.length === 0) {
           break;
-        } else {
-          assistantMessage.content[0].data = assistantMessage.content[0].data + result.value;
-          setPendingAssistantMessage({ ...assistantMessage });
         }
+
+        /** Execute tool calls and build output messages */
+        const toolOutputMessages: ServerTypes.FunctionCallOutputMessage[] = [];
+        for (const functionCall of pendingFunctionCalls) {
+          /** Update status to executing */
+          setPendingTurnParts(parts => parts.map(part => {
+            return part.type === 'tool_call' && part.call.call_id === functionCall.call_id ? {...part, status: "executing"} : part
+          }));
+
+          let resultText: string;
+          try {
+            if (functionCall.name === listFilesTool.name && toolContext) {
+              resultText = await listFilesTool.callAsync(JSON.parse(functionCall.arguments), toolContext);
+            } else if (functionCall.name === quickJSTool.name && toolContext) {
+              resultText = await quickJSTool.callAsync(JSON.parse(functionCall.arguments), toolContext);
+            } else {
+              resultText = `[Error] Unknown tool: ${functionCall.name}`;
+            }
+          } catch (err) {
+            resultText = `[Error] ${err instanceof Error ? err.message : String(err)}`;
+          }
+
+          setPendingTurnParts(parts => parts.map(part => {
+            return part.type === 'tool_call' && part.call.call_id === functionCall.call_id ? {...part, status: "done", result: resultText} : part
+          }));
+
+          toolOutputMessages.push({
+            type: "function_call_output",
+            call_id: functionCall.call_id,
+            output: [{ type: "text", data: resultText }],
+          });
+        }
+
+        /** Prepare next round: the parent is the last message from this round */
+        pendingMessages = toolOutputMessages;
       }
+
+      /** All done — update tree history from cache and set tail */
+      const finalHistory = await TUIClientSingleton.get().getChatAsync(chatId);
+      setTreeHistory(finalHistory);
+      setTailNodeId(parentForNextCall);
+      setPendingUserMessage(undefined);
+      setPendingTurnParts([]);
     } catch (error) {
       if (!callMismatch) {
-        setGenerationError(error)
+        setGenerationError(error);
       }
     } finally {
       if (!callMismatch) {
         setGenerating(false);
       }
     }
-  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, onCreateChat, requestChatListUpdateAsync]);
+  }, [loadingChat, generating, selectedModelId, activeChatId, tailNodeId, attachedFiles, onCreateChat, requestChatListUpdateAsync, handleAttachedFilesChange]);
 
   const cancelFailedGeneration = useCallback(() => {
     setGenerationError(undefined);
     setPendingUserMessage(undefined);
-    setPendingAssistantMessage(undefined);
+    setPendingTurnParts([]);
   }, []);
 
   const retryFailedGenerationAsync = useCallback(async () => {
@@ -286,12 +399,30 @@ export function Chat({
           }
           setTailNodeId(latestNode.id);
         }
+        /** Load attached files from chat metadata. We persist the file
+         *  name alongside the id, so no per-file server lookup is needed —
+         *  this also avoids spurious errors when a file has been deleted
+         *  server-side. Deletion is detected lazily at message-send time. */
+        try {
+          const meta = await TUIClientSingleton.get().getMetadataAsync({
+            path: ['chat', activeChatId],
+            keys: ['contextFiles'],
+          });
+          const loadedFiles = parseContextFiles(meta.contextFiles);
+          if (loadedFiles.length > 0) {
+            setAttachedFiles(loadedFiles);
+            onAttachedFilesChange?.(loadedFiles);
+          }
+        } catch {
+          /* metadata may not exist yet */
+        }
       } finally {
         setLoadingChat(false);
         setInitialLoadComplete(true);
       }
     })();
   /** Only load once */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -315,11 +446,74 @@ export function Chat({
     return nodes;
   }, [tailNodeId, treeHistory]);
 
+  /**
+   * Group the linear history into renderable turns.
+   * User messages render as Message. Everything between two user messages
+   * (assistant text, function calls, function call outputs) is grouped into an AssistantTurn.
+   */
+  type RenderItem =
+    | { kind: "user"; node: ServerTypes.MessageNode }
+    | { kind: "assistant-turn"; parts: CommittedTurnPart[]; firstNodeId: string };
+
+  const getRenderItems = useCallback((): RenderItem[] => {
+    const linear = getLinearHistory();
+    const items: RenderItem[] = [];
+    let currentTurnParts: CommittedTurnPart[] = [];
+    let turnFirstId: string | undefined;
+
+    const flushTurn = () => {
+      if (currentTurnParts.length > 0 && turnFirstId) {
+        items.push({ kind: "assistant-turn", parts: currentTurnParts, firstNodeId: turnFirstId });
+        currentTurnParts = [];
+        turnFirstId = undefined;
+      }
+    };
+
+    for (const node of linear) {
+      const msg = node.message;
+      if ("role" in msg) {
+        if (msg.role === "developer") continue;
+        if (msg.role === "user") {
+          flushTurn();
+          items.push({ kind: "user", node });
+        } else {
+          /** assistant */
+          if (!turnFirstId) turnFirstId = node.id;
+          const text = msg.content.filter(c => c.type === "text").map(c => c.data).join("\n");
+          if (text) {
+            currentTurnParts.push({ type: "text", content: text });
+          }
+        }
+      } else if (msg.type === "function_call") {
+        if (!turnFirstId) turnFirstId = node.id;
+        currentTurnParts.push({
+          type: "tool_call",
+          call: msg,
+        });
+      } else if (msg.type === "function_call_output") {
+        /** Attach result to the last tool_call part if possible */
+        const lastTc = [...currentTurnParts].reverse().find(p => p.type === "tool_call");
+        if (lastTc && lastTc.type === "tool_call" && lastTc.call.call_id === msg.call_id) {
+          lastTc.result = msg.output.filter(o => o.type === "text").map(o => o.data).join("\n");
+        }
+      }
+    }
+    flushTurn();
+    return items;
+  }, [getLinearHistory]);
+
   const editUserMessage = useCallback((id: string) => {
+    const node = treeHistory.nodes[id];
+    if (node === undefined) {
+      throw new Error(`Inconsistent tree history state: node ${id} not found.`);
+    }
+    if (!('role' in node.message) || node.message.role !== 'user') {
+      throw new Error("Only user messages can be edited.");
+    }
     setEditingBranch(true);
     setPreviousTailNodeId(tailNodeId);
-    setTailNodeId(treeHistory.nodes[id].parent);
-    setMessageToEdit(treeHistory.nodes[id].message);
+    setTailNodeId(node.parent);
+    setMessageToEdit(node.message);
   }, [tailNodeId, treeHistory]);
 
   const cancelEditingUserMessage = useCallback(() => {
@@ -402,21 +596,28 @@ export function Chat({
         onScroll={handleScroll}
       >
         <div className="max-w-[900px] mx-auto space-y-4">
-          {getLinearHistory()
-            .filter(n => n.message.role !== 'developer')
-            .map(node => (
-              <Message 
-                key={node.id}
-                message={node.message}
-                showButtons={node.message.role === 'user'}
-                editable={!loadingChat && !generating && !editingBranch && generationError === undefined}
-                hasPrevious={messageHasPreviousSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}
-                hasNext={messageHasNextSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}
-                onEdit={() => {editUserMessage(node.id)}}
-                onPrevious={() => {gotoPreviousSibling(node.id)}}
-                onNext={() => {gotoNextSibling(node.id)}}
-              />
-            ))}
+          {getRenderItems().map(item => {
+            if (item.kind === "user") {
+              const node = item.node;
+              return (
+                <Message
+                  key={node.id}
+                  message={node.message as ServerTypes.ChatMessage}
+                  showButtons
+                  editable={!loadingChat && !generating && !editingBranch && generationError === undefined}
+                  hasPrevious={messageHasPreviousSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}
+                  hasNext={messageHasNextSiblings(node.id) && !loadingChat && !generating && !editingBranch && generationError === undefined}
+                  onEdit={() => editUserMessage(node.id)}
+                  onPrevious={() => gotoPreviousSibling(node.id)}
+                  onNext={() => gotoNextSibling(node.id)}
+                />
+              );
+            } else {
+              return (
+                <AssistantTurn key={item.firstNodeId} parts={item.parts} />
+              );
+            }
+          })}
           {editingBranch && (
             <div className="flex items-center justify-between rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground/80">
               <span>正在编辑</span>
@@ -432,8 +633,8 @@ export function Chat({
           {pendingUserMessage && (
             <Message key="pending-user-message" message={pendingUserMessage} />
           )}
-          {pendingAssistantMessage && (
-            <Message key="pending-assistant-message" message={pendingAssistantMessage} />
+          {pendingTurnParts.length > 0 && (
+            <AssistantTurn key="pending-turn" parts={pendingTurnParts} />
           )}
           {generating && (
             <div ref={bottomRef} className="flex min-h-[24px] items-end">
@@ -484,6 +685,14 @@ export function Chat({
           )}
         </div>
       </div>
+
+      { /** File context bar */ }
+      <FileContextBar
+        chatId={activeChatId}
+        attachedFiles={attachedFiles}
+        onAttachedFilesChange={handleAttachedFilesChange}
+        disabled={loadingChat || generating}
+      />
 
       { /** User input area */ }
       <UserInput

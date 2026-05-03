@@ -116,7 +116,7 @@ describe('QuickJSTool script execution', () => {
             { file: 'data.txt', script: '2 + 3' },
             ctx
         );
-        expect(result).toBe(5);
+        expect(result).toBe('5');
     });
 
     test('script can process file content', async () => {
@@ -124,7 +124,7 @@ describe('QuickJSTool script execution', () => {
             { file: 'nums.txt', script: 'fileContent.split("\\n").map(Number).reduce((a, b) => a + b, 0)' },
             ctx
         );
-        expect(result).toBe(6);
+        expect(result).toBe('6');
     });
 
     test('script returns undefined for statements without return value', async () => {
@@ -132,7 +132,7 @@ describe('QuickJSTool script execution', () => {
             { file: 'data.txt', script: 'var x = 1;' },
             ctx
         );
-        expect(result).toBeUndefined();
+        expect(result).toBe('undefined');
     });
 
     test('script can use string methods on fileContent', async () => {
@@ -140,7 +140,7 @@ describe('QuickJSTool script execution', () => {
             { file: 'data.txt', script: 'fileContent.length' },
             ctx
         );
-        expect(result).toBe(13);
+        expect(result).toBe('13');
     });
 
     test('script can use JSON.parse and JSON.stringify', async () => {

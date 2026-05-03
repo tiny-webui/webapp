@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { TUIClientSingleton } from "@/lib/tui-client-singleton";
@@ -34,19 +34,6 @@ export function FileContextBar({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
-
-  /** Close picker when clicking outside */
-  useEffect(() => {
-    if (!pickerOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [pickerOpen]);
 
   const loadAllFiles = useCallback(async () => {
     setLoadingFiles(true);
@@ -159,12 +146,12 @@ export function FileContextBar({
   return (
     <>
       {/* Context bar */}
-      <div className="border-t border-border/50 px-4 py-1.5">
-        <div className="max-w-[900px] mx-auto flex items-center gap-2 flex-wrap min-h-[28px]">
+      <div className="px-4 py-1.5">
+        <div className="max-w-[900px] mx-auto flex items-center gap-2 min-h-[28px] overflow-hidden">
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 gap-1.5 text-xs text-muted-foreground"
+            className="h-7 gap-1.5 text-xs text-muted-foreground shrink-0"
             onClick={openPicker}
             disabled={disabled}
           >
@@ -172,11 +159,17 @@ export function FileContextBar({
             附加文件
           </Button>
 
+          {nonDeletedCount > 0 && (
+            <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+              {nonDeletedCount}
+            </span>
+          )}
+
           {attachedFiles.map((f) => (
             <span
               key={f.fileId}
               className={cn(
-                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs shrink-0 whitespace-nowrap",
                 f.deleted
                   ? "border-destructive/40 bg-destructive/10 text-destructive line-through"
                   : "border-border bg-muted/50 text-foreground/80"
@@ -195,55 +188,50 @@ export function FileContextBar({
               )}
             </span>
           ))}
-
-          {nonDeletedCount > 0 && (
-            <span className="text-xs text-muted-foreground">
-              {nonDeletedCount} 个文件
-            </span>
-          )}
         </div>
       </div>
 
-      {/* File picker popover */}
-      {pickerOpen && (
-        <div className="fixed inset-0 z-40" onClick={() => setPickerOpen(false)}>
-          <div
-            ref={pickerRef}
-            className="absolute bottom-24 left-1/2 -translate-x-1/2 w-full max-w-md bg-background border border-border rounded-lg shadow-lg z-50 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-              <span className="text-sm font-medium">选择文件</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="size-3" />
-                  上传新文件
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.sql,.sh,.bat,.ps1,.html,.css,.scss,.less,.svg"
-                  onChange={handleUpload}
-                />
+      {/* File picker dialog */}
+      <Modal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        title="选择文件"
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="size-3.5" />
+              上传新文件
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.ini,.cfg,.conf,.log,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.sql,.sh,.bat,.ps1,.html,.css,.scss,.less,.svg"
+              onChange={handleUpload}
+            />
+          </div>
+          <div className="max-h-[400px] overflow-y-auto -mx-1 px-1">
+            {loadingFiles ? (
+              <div className="flex w-full items-center justify-center py-8 gap-3 select-none">
+                <div className="relative h-6 w-6">
+                  <div className="absolute inset-0 rounded-full border-2 border-muted opacity-30" />
+                  <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                </div>
+                <span className="text-sm text-muted-foreground">加载中…</span>
               </div>
-            </div>
-            <div className="max-h-[300px] overflow-y-auto">
-              {loadingFiles ? (
-                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  加载中…
-                </div>
-              ) : allFiles.length === 0 ? (
-                <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                  暂无文件，请上传新文件
-                </div>
-              ) : (
-                allFiles.map((f) => {
+            ) : allFiles.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                暂无文件，请上传新文件
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {allFiles.map((f) => {
                   const meta = f.fileMetadata as { name?: string; uploadTime?: number } | null;
                   const name = meta?.name ?? f.fileId;
                   const isAttached = attachedFiles.some((a) => a.fileId === f.fileId);
@@ -251,7 +239,10 @@ export function FileContextBar({
                     <button
                       key={f.fileId}
                       type="button"
-                      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-muted/50 transition-colors"
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg border bg-card/50 p-3 text-left shadow-xs hover:shadow-sm hover:bg-accent/40 transition-all",
+                        isAttached && "border-primary/60 bg-primary/5"
+                      )}
                       onClick={() => toggleFile(f.fileId, name)}
                     >
                       <div
@@ -264,7 +255,7 @@ export function FileContextBar({
                       >
                         {isAttached && <Check className="size-3" />}
                       </div>
-                      <span className="truncate flex-1">{name}</span>
+                      <span className="truncate flex-1 text-sm">{name}</span>
                       {meta?.uploadTime && (
                         <span className="text-xs text-muted-foreground shrink-0">
                           {new Date(meta.uploadTime).toLocaleDateString()}
@@ -272,12 +263,12 @@ export function FileContextBar({
                       )}
                     </button>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Upload modal */}
       <Modal

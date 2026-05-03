@@ -96,7 +96,7 @@ function ToolCallSection({
 export function AssistantTurn({ parts }: { parts: (PendingTurnPart | CommittedTurnPart)[] }) {
   return (
     <div className="flex justify-start">
-      <div className="rounded-lg px-4 py-2 bg-background max-w-[100%]">
+      <div className="rounded-lg px-4 py-2 bg-background w-full min-w-0">
         {parts.map((part, idx) => {
           if (part.type === "text") {
             if (!part.content) return null;

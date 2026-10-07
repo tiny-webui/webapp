@@ -16,6 +16,8 @@ function renderSide(override: Partial<React.ComponentProps<typeof Side>> = {}) {
     onSwitchChat: jest.fn(),
     requestChatListUpdateAsync: async () => {},
     onChatDisplayRangeChange: jest.fn(),
+    onSetChatTitle: jest.fn(),
+    onDeleteChat: jest.fn(),
     chatList: makeChats(3),
     activeChatId: undefined,
     onHideSidebar: jest.fn(),

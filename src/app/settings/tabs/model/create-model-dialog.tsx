@@ -10,10 +10,12 @@ import { TUIClientSingleton } from '@/lib/tui-client-singleton';
 
 export interface CreateModelDialogProps {
   onComplete: () => void; // UI-only for now
+  initialProvider?: ProviderKey;
+  initialSettings?: unknown;
 }
 
-export const CreateModelDialog = ({ onComplete }: CreateModelDialogProps) => {
-  const [selectedProvider, setSelectedProvider] = useState<ProviderKey | undefined>(undefined);
+export const CreateModelDialog = ({ onComplete, initialProvider, initialSettings }: CreateModelDialogProps) => {
+  const [selectedProvider, setSelectedProvider] = useState<ProviderKey | undefined>(initialProvider);
   const [saving, setSaving] = useState(false);
 
   const createModelAsync = useCallback(async (name: string, settings: unknown) => {
@@ -76,11 +78,13 @@ export const CreateModelDialog = ({ onComplete }: CreateModelDialogProps) => {
       )}
       {selectedProvider === 'AzureOpenAI' && (!saving) && (
         <AzureOpenAIForm
+          initialSettings={initialSettings}
           onSubmit={createModelAsync}
         />
       )}
       {selectedProvider === 'OpenAI' && (!saving) && (
         <OpenAIForm
+          initialSettings={initialSettings}
           onSubmit={createModelAsync}
         />
       )}

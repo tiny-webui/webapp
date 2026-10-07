@@ -13,12 +13,18 @@ import { Logo } from "@/components/custom/logo";
 
 const CHAT_LIST_MARGIN = 50;
 
+type ChatLists = {
+  chats: ServerTypes.GetChatListResult;
+  pinned: ServerTypes.GetPinnedChatListResult;
+};
+
 export default function ChatPage() {
   const [activeChatId, setActiveChatId] = useState<string|undefined>(undefined);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [selectedModelId, setSelectedModelId] = useState<string|undefined>(undefined);
   const [titleGenerationModelId, setTitleGenerationModelId] = useState<string|undefined>(undefined);
-  const [chatList, setChatList] = useState<ServerTypes.GetChatListResult>([]);
+  const chatListsRef = useRef<ChatLists>({ chats: [], pinned: [] });
+  const [chatLists, setChatLists] = useState(chatListsRef.current);
   const [initialized, setInitialized] = useState(false);
   const [newChatUserMessage, setNewChatUserMessage] = useState<ServerTypes.Message|undefined>(undefined);
   const [newChatAttachedFiles, setNewChatAttachedFiles] = useState<import('./file-context-bar').AttachedFile[]>([]);
@@ -26,7 +32,13 @@ export default function ChatPage() {
   /** The index of the last chat displayed. -1 if none is displayed */
   const maxDisplayedChatIndex = useRef<number>(-1);
   const updateChatListPromise = useRef<Promise<void>|undefined>(undefined);
+  const refreshChatListRequested = useRef(false);
   const scrollPositions = useRef<Record<string, number>>({});
+
+  const updateChatLists = useCallback((updater: (current: ChatLists) => ChatLists) => {
+    chatListsRef.current = updater(chatListsRef.current);
+    setChatLists(chatListsRef.current);
+  }, []);
 
   const onSwitchChat = useCallback((chatId: string | undefined) => {
     setActiveChatId(chatId);
@@ -42,24 +54,27 @@ export default function ChatPage() {
     const chatInfo = {
       id: chatId
     };
-    setChatList(prev => [chatInfo, ...prev]);
+    updateChatLists(current => ({ ...current, chats: [chatInfo, ...current.chats] }));
+    refreshChatListRequested.current = true;
     setActiveChatId(chatId);
     setNewChatUserMessage(message);
     setNewChatAttachedFiles(attachedFiles);
-  }, []);
+  }, [updateChatLists]);
 
   const onDeleteChat = useCallback((chatId: string) => {
-    setChatList(prevList => {
-      return prevList.filter(chat => chat.id !== chatId);
-    });
+    updateChatLists(current => ({
+      chats: current.chats.filter(chat => chat.id !== chatId),
+      pinned: current.pinned.filter(chat => chat.id !== chatId),
+    }));
+    refreshChatListRequested.current = true;
     if (activeChatId === chatId) {
       setActiveChatId(undefined);
     }
-  }, [activeChatId]);
+  }, [activeChatId, updateChatLists]);
 
   const onSetChatTitle = useCallback((chatId: string, title: string) => {
-    setChatList(prevList => {
-      return prevList.map(chat => {
+    const updateTitle = (list: ServerTypes.GetChatListResult) => {
+      return list.map(chat => {
         if (chat.id === chatId) {
           return {
             ...chat,
@@ -72,8 +87,13 @@ export default function ChatPage() {
           return chat;
         }
       });
-    });
-  }, []);
+    };
+    updateChatLists(current => ({
+      chats: updateTitle(current.chats),
+      pinned: updateTitle(current.pinned),
+    }));
+    refreshChatListRequested.current = true;
+  }, [updateChatLists]);
 
   const onScrollPositionChange = useCallback((scrollTop: number) => {
     if (activeChatId) {
@@ -85,22 +105,29 @@ export default function ChatPage() {
     /** Allow two trials in case of resource conflict */
     for (let trial = 0; trial < 2; trial++) {
       try {
-        const oldList = JSON.parse(JSON.stringify(chatList)) as ServerTypes.GetChatListResult;
-        const start = fromStart ? 0 : chatList.length;
-        const segment = await TUIClientSingleton.get().getChatListAsync({
-          start: start,
-          quantity: fromStart ? maxDisplayedChatIndex.current + 1 + CHAT_LIST_MARGIN : CHAT_LIST_MARGIN,
-          metaDataKeys: ["title"],
-        });
-        const newList = fromStart ? segment : [...oldList, ...segment];
-        setChatList(newList);
-        if (newList.find(c => c.id === activeChatId) === undefined) {
-          /** The active chat was deleted */
-          onSwitchChat(undefined);
+        const client = TUIClientSingleton.get();
+        const pinned = await client.getPinnedChatListAsync({ metaDataKeys: ["title"] });
+        const pinnedIds = new Set(pinned.map(chat => chat.id));
+        const chats = fromStart ? [] : [...chatListsRef.current.chats];
+        let quantity = fromStart
+          ? Math.max(chatListsRef.current.chats.length, maxDisplayedChatIndex.current + 1 + CHAT_LIST_MARGIN)
+          : CHAT_LIST_MARGIN;
+        while (true) {
+          const segment = await client.getChatListAsync({
+            start: chats.length,
+            quantity,
+            metaDataKeys: ["title"],
+          });
+          chats.push(...segment);
+          if (segment.length < quantity || segment.some(chat => !pinnedIds.has(chat.id))) {
+            break;
+          }
+          quantity = CHAT_LIST_MARGIN;
         }
+        updateChatLists(() => ({ chats, pinned }));
         return;
       } catch (error) {
-        if (error instanceof RequestError && (error.code === ErrorCode.CONFLICT)) {
+        if (trial === 0 && error instanceof RequestError && error.code === ErrorCode.CONFLICT) {
           /** Retry from the start */
           fromStart = true; 
         } else {
@@ -108,14 +135,28 @@ export default function ChatPage() {
         }
       }
     }
-  }, [chatList, activeChatId, onSwitchChat]);
+  }, [updateChatLists]);
 
-  const updateChatListDedupAsync = useCallback(async () => {
-    if (updateChatListPromise.current === undefined) {
-      updateChatListPromise.current = updateChatListAsync();
+  const updateChatListDedupAsync = useCallback(async (fromStart = false) => {
+    if (fromStart) {
+      refreshChatListRequested.current = true;
     }
-    await updateChatListPromise.current;
-    updateChatListPromise.current = undefined;
+    if (updateChatListPromise.current !== undefined) {
+      await updateChatListPromise.current;
+      return;
+    }
+    updateChatListPromise.current = (async () => {
+      do {
+        const refresh = refreshChatListRequested.current;
+        refreshChatListRequested.current = false;
+        await updateChatListAsync(refresh);
+      } while (refreshChatListRequested.current);
+    })();
+    try {
+      await updateChatListPromise.current;
+    } finally {
+      updateChatListPromise.current = undefined;
+    }
   }, [updateChatListAsync]);
 
   useEffect(() => {
@@ -151,6 +192,9 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const pinnedChatIds = new Set(chatLists.pinned.map(chat => chat.id));
+  const chatList = [...chatLists.pinned, ...chatLists.chats.filter(chat => !pinnedChatIds.has(chat.id))];
+
   if (!initialized) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
@@ -177,6 +221,7 @@ export default function ChatPage() {
           onSetChatTitle={onSetChatTitle}
           onDeleteChat={onDeleteChat}
           chatList={chatList}
+          pinnedChatIds={pinnedChatIds}
           activeChatId={activeChatId}
           onHideSidebar={() => setIsSidebarVisible(false)}
         />

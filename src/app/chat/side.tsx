@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState, MouseEvent, useLayoutEffect } from "react";
-import { PanelLeftClose } from "lucide-react";
+import { PanelLeftClose, Pin, PinOff } from "lucide-react";
 import { Logo } from "@/components/custom/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +16,13 @@ interface SideProps {
   /** Switch to a chat id. Pass undefined for the temporary new chat */
   onSwitchChat: (chatId: string | undefined) => void;
   /** Ask the outer page to attempt updating (loading more / refreshing) the chat list. Already deduplicated outside */
-  requestChatListUpdateAsync: () => Promise<void>;
+  requestChatListUpdateAsync: (fromStart?: boolean) => Promise<void>;
   /** Report the greatest chat index (0-based) currently visible in the list (not counting the temporary chat) */
   onChatDisplayRangeChange: (max: number) => void;
   onSetChatTitle: (chatId: string, title: string) => void;
   onDeleteChat: (chatId: string) => void;
   chatList: ServerTypes.GetChatListResult;
+  pinnedChatIds?: ReadonlySet<string>;
   activeChatId: string | undefined;
   onHideSidebar: () => void;
 }
@@ -51,6 +52,7 @@ export function Side({
   onSetChatTitle,
   onDeleteChat,
   chatList,
+  pinnedChatIds,
   activeChatId,
   onHideSidebar,
 }: SideProps) {
@@ -70,6 +72,8 @@ export function Side({
   const [renameInput, setRenameInput] = useState<string>("");
   const [renameSubmitting, setRenameSubmitting] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [pinSubmitting, setPinSubmitting] = useState(false);
+  const [pinError, setPinError] = useState<string | undefined>(undefined);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -93,11 +97,13 @@ export function Side({
     return typeof title === "string" && title.trim().length > 0 ? title : "未命名对话";
   }, []);
 
-  const onChatContextMenu = useCallback((event: MouseEvent<HTMLDivElement>, chat: ServerTypes.GetChatListResult[number]) => {
+  const onChatContextMenu = useCallback((event: MouseEvent<HTMLElement>, chat: ServerTypes.GetChatListResult[number]) => {
     event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPinError(undefined);
     setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x: event.type === "contextmenu" ? event.clientX : rect.right,
+      y: event.type === "contextmenu" ? event.clientY : rect.bottom,
       chatId: chat.id,
       title: getChatTitle(chat),
     });
@@ -182,6 +188,24 @@ export function Side({
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
+  const togglePinnedAsync = useCallback(async () => {
+    if (!contextMenu || pinSubmitting) return;
+    setPinSubmitting(true);
+    setPinError(undefined);
+    try {
+      await TUIClientSingleton.get().setChatPinnedAsync({
+        id: contextMenu.chatId,
+        pinned: !pinnedChatIds?.has(contextMenu.chatId),
+      });
+      await requestChatListUpdateAsync(true);
+      closeContextMenu();
+    } catch (error) {
+      setPinError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPinSubmitting(false);
+    }
+  }, [contextMenu, pinSubmitting, pinnedChatIds, requestChatListUpdateAsync, closeContextMenu]);
+
   const openRenameDialog = useCallback((chatId: string, title: string) => {
     setRenameDialog({ open: true, chatId, title });
     setRenameInput(title);
@@ -256,7 +280,7 @@ export function Side({
     } catch (error) {
       if (error instanceof RequestError && error.code === ErrorCode.CONFLICT) {
         closeDeleteDialog();
-        await requestChatListUpdateAsync();
+        await requestChatListUpdateAsync(true);
         /** TODO: notify the user with global error banner. */
         return;
       }
@@ -311,11 +335,13 @@ export function Side({
                   id={chat.id}
                   active={chat.id === activeChatId}
                   title={title}
+                  pinned={pinnedChatIds?.has(chat.id)}
                   ref={el => {
                     chatItemRefs.current[idx] = el;
                   }}
                   onChatSelected={onChatSelected}
                   onContextMenu={event => onChatContextMenu(event, chat)}
+                  onMenuClick={event => onChatContextMenu(event, chat)}
                 />
               })}
               {isLoading && (
@@ -345,7 +371,19 @@ export function Side({
             onClick={event => event.stopPropagation()}
           >
             <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              onClick={togglePinnedAsync}
+              disabled={pinSubmitting}
+            >
+              {pinnedChatIds?.has(contextMenu.chatId)
+                ? <PinOff className="size-4" />
+                : <Pin className="size-4" />}
+              {pinnedChatIds?.has(contextMenu.chatId) ? "取消置顶" : "置顶"}
+            </button>
+            {pinError && <p role="alert" className="max-w-64 break-words px-3 py-2 text-xs text-destructive">{pinError}</p>}
+            <button
               className="w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground"
+              disabled={pinSubmitting}
               onClick={() => {
                 closeContextMenu();
                 openRenameDialog(contextMenu.chatId, contextMenu.title);
@@ -355,6 +393,7 @@ export function Side({
             </button>
             <button
               className="w-full px-3 py-2 text-left text-destructive hover:bg-accent hover:text-accent-foreground"
+              disabled={pinSubmitting}
               onClick={() => {
                 closeContextMenu();
                 openDeleteDialog(contextMenu.chatId, contextMenu.title);

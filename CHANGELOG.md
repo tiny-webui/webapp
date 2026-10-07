@@ -1,3 +1,10 @@
+# Unreleased
+
+## What's new
+
+* Pin and unpin chats from the chat actions menu. Pinned chats appear above the normal list.
+* Order both lists by the latest successful message write. Renaming, changing settings, and pinning do not change activity time.
+
 # 0.3.0
 
 This is a breaking change and requires the backend with version 0.3.x.

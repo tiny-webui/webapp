@@ -84,6 +84,22 @@ export class TUIClient implements types.IServer {
         await this.#rpcClient.connectAsync();
     }
 
+    #validateChatList(result: unknown): asserts result is types.GetChatListResult {
+        if (!Array.isArray(result)) {
+            throw new rpc.RequestError(-1, "Invalid response, result should be an array");
+        }
+        for (const item of result) {
+            if (typeof item !== 'object' || item === null || typeof item.id !== 'string') {
+                throw new rpc.RequestError(-1, "Invalid response, id missing");
+            }
+            if ('metadata' in item) {
+                if (typeof item.metadata !== 'object' || item.metadata === null) {
+                    throw new rpc.RequestError(-1, "Invalid response, invalid metadata");
+                }
+            }
+        }
+    }
+
     async #getChatListAsync(start: number, quantity: number, metaDataKeys?: string[]): Promise<types.GetChatListResult> {
         if (this.#rpcClient === undefined) {
             throw new rpc.RequestError(-1, "client not connected");
@@ -94,19 +110,7 @@ export class TUIClient implements types.IServer {
                 quantity,
                 metaDataKeys
             });
-        if (!(typeof result === 'object') || result === null) {
-            throw new rpc.RequestError(-1, "Invalid response, result should be an object");
-        }
-        for (const item of result) {
-            if (typeof item.id !== 'string') {
-                throw new rpc.RequestError(-1, "Invalid response, id missing");
-            }
-            if ('metadata' in item) {
-                if (typeof item.metadata !== 'object' || item.metadata === null) {
-                    throw new rpc.RequestError(-1, "Invalid response, invalid metadata");
-                }
-            }
-        }
+        this.#validateChatList(result);
         return result;
     }
 
@@ -116,6 +120,27 @@ export class TUIClient implements types.IServer {
             params.start,
             params.quantity,
             params.metaDataKeys);
+    }
+
+    async #getPinnedChatListAsync(params: types.GetPinnedChatListParams): Promise<types.GetPinnedChatListResult> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        const result = await this.#rpcClient.makeRequestAsync<types.GetPinnedChatListParams, types.GetPinnedChatListResult>(
+            'getPinnedChatList', params);
+        this.#validateChatList(result);
+        return result;
+    }
+
+    async getPinnedChatListAsync(params: types.GetPinnedChatListParams): Promise<types.GetPinnedChatListResult> {
+        return this.#cache.getAsync(this.#getPinnedChatListAsync.bind(this), ['pinnedChatList'], params);
+    }
+
+    async setChatPinnedAsync(params: types.SetChatPinnedParams): Promise<void> {
+        if (this.#rpcClient === undefined) {
+            throw new rpc.RequestError(-1, "client not connected");
+        }
+        await this.#rpcClient.makeRequestAsync<types.SetChatPinnedParams, void>('setChatPinned', params);
     }
 
     async #newChatAsync(): Promise<string> {

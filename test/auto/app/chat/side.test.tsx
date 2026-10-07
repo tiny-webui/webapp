@@ -1,8 +1,9 @@
 /// <reference types="@testing-library/jest-dom" />
 import React from 'react';
 import { jest } from '@jest/globals';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { Side } from '@/app/chat/side';
+import { TUIClientSingleton } from '@/lib/tui-client-singleton';
 
 function makeChats(count: number) {
   return Array.from({ length: count }, (_, i) => ({
@@ -202,5 +203,70 @@ describe('Side chat list', () => {
     rafSpy.mockRestore();
     cancelSpy.mockRestore();
     jest.useRealTimers();
+  });
+});
+
+describe('Chat pin actions', () => {
+  const setChatPinnedAsync = jest.fn<(params: { id: string; pinned: boolean }) => Promise<void>>();
+
+  beforeEach(() => {
+    setChatPinnedAsync.mockReset().mockResolvedValue(undefined);
+    jest.spyOn(TUIClientSingleton, 'get').mockReturnValue({
+      setChatPinnedAsync,
+    } as unknown as ReturnType<typeof TUIClientSingleton.get>);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  test.each([
+    { pinned: false, label: '置顶' },
+    { pinned: true, label: '取消置顶' },
+  ])('$label saves the new state and refreshes from the head', async ({ pinned, label }) => {
+    const refresh = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    renderSide({
+      pinnedChatIds: new Set(pinned ? ['chat-1'] : []),
+      requestChatListUpdateAsync: refresh,
+    });
+    expect(screen.queryAllByLabelText('Pinned chat')).toHaveLength(pinned ? 1 : 0);
+    fireEvent.contextMenu(screen.getByText('Chat Title 1'));
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledWith(true));
+    expect(setChatPinnedAsync).toHaveBeenCalledWith({ id: 'chat-1', pinned: !pinned });
+    expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+  });
+
+  test('the actions button opens the menu without switching chats', () => {
+    const onSwitchChat = jest.fn();
+    renderSide({ onSwitchChat });
+    const row = screen.getByText('Chat Title 1').closest('div')!;
+    fireEvent.click(within(row).getByRole('button', { name: 'Chat actions' }));
+    expect(screen.getByRole('button', { name: '置顶' })).toBeInTheDocument();
+    expect(onSwitchChat).not.toHaveBeenCalled();
+  });
+
+  test('a failed pin stays actionable and reports the error', async () => {
+    setChatPinnedAsync.mockRejectedValueOnce(new Error('Unable to save pin'));
+    const refresh = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    renderSide({ requestChatListUpdateAsync: refresh });
+    fireEvent.contextMenu(screen.getByText('Chat Title 0'));
+    fireEvent.click(screen.getByRole('button', { name: '置顶' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save pin');
+    expect(screen.getByRole('button', { name: '置顶' })).toBeEnabled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Pinned chat')).not.toBeInTheDocument();
+  });
+
+  test('disables the action while the pin is being saved', async () => {
+    let resolvePin!: () => void;
+    setChatPinnedAsync.mockImplementationOnce(() => new Promise(resolve => { resolvePin = resolve; }));
+    renderSide();
+    fireEvent.contextMenu(screen.getByText('Chat Title 0'));
+    const button = screen.getByRole('button', { name: '置顶' });
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(setChatPinnedAsync).toHaveBeenCalledTimes(1);
+    await act(async () => resolvePin());
+    expect(screen.queryByRole('button', { name: '置顶' })).not.toBeInTheDocument();
   });
 });

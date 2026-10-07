@@ -1,3 +1,13 @@
+# 0.4.0
+
+This is a breaking change and requires the backend with version 0.4.x.
+
+## What's new
+
+* **[breaking]** Pin and unpin chats from the chat actions menu. Pinned chats appear above the normal list.
+* Order chat list by the latest successful update.
+* Support "duplicate to create" for model configs.
+
 # 0.3.0
 
 This is a breaking change and requires the backend with version 0.3.x.

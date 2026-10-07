@@ -21,7 +21,7 @@ type ToolContext = ListFilesToolContext & QuickJSToolContext;
 interface ChatProps {
   onCreateChat: (chatId: string, message: ServerTypes.Message, attachedFiles: AttachedFile[]) => void;
   onSetChatTitle: (chatId: string, title: string) => void;
-  requestChatListUpdateAsync?: () => Promise<void>;
+  requestChatListUpdateAsync?: (fromStart?: boolean) => Promise<void>;
   activeChatId?: string;
   selectedModelId?: string;
   titleGenerationModelId?: string;
@@ -174,7 +174,7 @@ export function Chat({
           if (!(error instanceof RequestError) || error.code !== ErrorCode.CONFLICT) {
             throw error;
           }
-          await requestChatListUpdateAsync?.();
+          await requestChatListUpdateAsync?.(true);
           chatId = await TUIClientSingleton.get().newChatAsync();
         }
         onCreateChat(chatId, message, attachedFiles);
@@ -249,6 +249,7 @@ export function Chat({
           }
           if (result.done) {
             parentForNextCall = result.value.messageIds[result.value.messageIds.length - 1];
+            await requestChatListUpdateAsync?.(true).catch(console.error);
             break;
           } else {
             if (typeof result.value === "string") {
